@@ -1,3 +1,3 @@
-mod dfa;
+mod lexer;
 
 fn main() {}
