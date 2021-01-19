@@ -11,14 +11,19 @@ pub struct Symbol(pub char);
 pub struct State(pub u32);
 
 /// A sorted, unique list of states.
+///
+/// We use these as the states of a DFA generated from an NFA.
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct StateSet {
-    states: Rc<[State]>,
+pub struct StateSet<S> {
+    states: Rc<[S]>,
 }
 
-impl StateSet {
+impl<S> StateSet<S>
+where
+    S: Copy + Ord,
+{
     /// `states` must be non-empty and strictly increasing.
-    pub fn new(states: impl Iterator<Item = State>) -> Self {
+    pub fn new(states: impl Iterator<Item = S>) -> Self {
         let ss = Self {
             states: Rc::from_iter(states),
         };
@@ -31,11 +36,11 @@ impl StateSet {
     }
 
     /// Get the inner states.
-    pub fn states(&self) -> &[State] {
+    pub fn states(&self) -> &[S] {
         &self.states
     }
 
-    /// Just an alias for `clone`, because `Rc` clones are cheap.
+    /// Just an alias for `clone`, because `S` is Copy and `Rc` clones are cheap.
     pub fn copy(&self) -> Self {
         self.clone()
     }
@@ -61,8 +66,8 @@ impl fmt::Debug for Symbol {
     }
 }
 
-impl fmt::Debug for StateSet {
-    /// We could just derive, but this avoids newlines in {:#?} output.
+impl<S: fmt::Debug> fmt::Debug for StateSet<S> {
+    /// This avoids newlines in {:#?} output.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "StateSet({:?})", self.states)
     }

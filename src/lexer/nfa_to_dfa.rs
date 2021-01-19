@@ -1,19 +1,27 @@
 use crate::lexer::dfa::DFA;
 use crate::lexer::nfa::NFA;
-use crate::lexer::types::{State, StateSet, Symbol};
+use crate::lexer::types::{StateSet, Symbol};
+use crate::types::TokenType;
 use std::collections::{BTreeSet, HashMap as Map, HashSet as Set};
+use std::hash::Hash;
 
 /// Helper struct to convert an NFA to an equivalent DFA.
-pub struct NfaConverter<'a> {
-    nfa: &'a NFA,
+///
+/// The generic type `S` will usually be the type `State`, except in unit tests.
+pub struct NfaConverter<'a, S> {
+    nfa: &'a NFA<S>,
 
     /// Each (key, value) pair of this is a single key of `nfa.delta`.
-    /// This lets us efficiently find the active symbols of a given State.
-    active_symbols: Map<State, Vec<Symbol>>,
+    /// This lets us efficiently find the active symbols of a given state
+    /// of the nfa.
+    active_symbols: Map<S, Vec<Symbol>>,
 }
 
-impl<'a> NfaConverter<'a> {
-    pub fn new(nfa: &'a NFA) -> Self {
+impl<'a, S> NfaConverter<'a, S>
+where
+    S: Copy + Ord + Hash,
+{
+    pub fn new(nfa: &'a NFA<S>) -> Self {
         let mut tmp = Self {
             nfa,
             active_symbols: Map::new(),
@@ -24,12 +32,12 @@ impl<'a> NfaConverter<'a> {
 
     /// Perform the conversion.
     ///
-    /// The "states" of the resulting DFA have type StateSet.
-    pub fn to_dfa(self) -> DFA<StateSet> {
+    /// The "states" of the resulting DFA have type `StateSet<S>`.
+    pub fn to_dfa(self) -> DFA<StateSet<S>> {
         let init = self.eps_closure_one_state(self.nfa.init);
         let mut dfa = DFA {
             init: init.copy(),
-            accepted: Set::new(),
+            accepted: Map::new(),
             delta: Map::new(),
         };
 
@@ -41,8 +49,8 @@ impl<'a> NfaConverter<'a> {
         // `ss` is the "current" StateSet.
         while let Some(ss) = q.pop() {
             // Should `ss` be accepted by the DFA?
-            if ss.states().iter().any(|s| self.nfa.accepted.contains(s)) {
-                dfa.accepted.insert(ss.copy());
+            if let Some(t) = self.token_type(&ss) {
+                dfa.accepted.insert(ss.copy(), t);
             }
 
             // For each relevant symbol, enqueue a new StateSet.
@@ -60,6 +68,23 @@ impl<'a> NfaConverter<'a> {
         dfa
     }
 
+    /// Is `ss` is accepted by the DFA, and if so, which token type does it yield?
+    ///
+    /// This is determined by whether any of the "inner" states of the NFA are accepted.
+    ///
+    /// Ties for token type are broken by priority, via `S`'s `Ord` implementation. This means the
+    /// most "important" tokens should have the smallest accepting states; e.g. keywords before
+    /// identifiers, etc.
+    fn token_type(&self, ss: &StateSet<S>) -> Option<TokenType> {
+        // Since `StateSet`s are sorted, we'll find the smallest accepted state.
+        for s in ss.states() {
+            if let Some(&t) = self.nfa.accepted.get(s) {
+                return Some(t);
+            }
+        }
+        None
+    }
+
     /// See the `active_symbols` field for details.
     fn compute_active_symbols(&mut self) {
         assert!(self.active_symbols.is_empty());
@@ -69,7 +94,7 @@ impl<'a> NfaConverter<'a> {
     }
 
     /// Find all symbols that have transitions out of this StateSet.
-    fn active_symbols(&self, ss: &StateSet) -> Set<Symbol> {
+    fn active_symbols(&self, ss: &StateSet<S>) -> Set<Symbol> {
         let mut symbols = Set::new();
         for s in ss.states() {
             if let Some(syms) = self.active_symbols.get(s) {
@@ -82,7 +107,7 @@ impl<'a> NfaConverter<'a> {
     /// Simultaneously transistion all states in `ss`, to produce a new StateSet.
     ///
     /// Takes the epsilon closure of the result before returning.
-    fn next_stateset(&self, ss: &StateSet, sym: Symbol) -> StateSet {
+    fn next_stateset(&self, ss: &StateSet<S>, sym: Symbol) -> StateSet<S> {
         let mut reachable = BTreeSet::new();
         for &s in ss.states() {
             if let Some(nbrs) = self.nfa.delta.get(&(s, sym)) {
@@ -95,8 +120,8 @@ impl<'a> NfaConverter<'a> {
         StateSet::new(reachable.into_iter())
     }
 
-    /// Find the epsilon closure of a single State.
-    fn eps_closure_one_state(&self, state: State) -> StateSet {
+    /// Find the epsilon closure of a single state of the NFA.
+    fn eps_closure_one_state(&self, state: S) -> StateSet<S> {
         let mut states = BTreeSet::new();
         states.insert(state);
 
@@ -108,7 +133,7 @@ impl<'a> NfaConverter<'a> {
     /// Find states reachable via epsilon transistions from `reachable`.
     ///
     /// `reachable` should typically start non-empty. It will be updated with the results.
-    fn eps_closure(&self, reachable: &mut BTreeSet<State>) {
+    fn eps_closure(&self, reachable: &mut BTreeSet<S>) {
         let mut q: Vec<_> = reachable.iter().copied().collect();
 
         while let Some(s) = q.pop() {
