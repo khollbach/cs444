@@ -4,7 +4,21 @@ use std::rc::Rc;
 
 /// A symbol in the input stream to a DFA or NFA.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol(pub char);
+pub struct Symbol {
+    c: char,
+}
+
+impl Symbol {
+    /// `c` must be ASCII.
+    pub fn new(c: char) -> Self {
+        debug_assert!(c < 128 as char);
+        Self { c }
+    }
+
+    pub fn to_char(self) -> char {
+        self.c
+    }
+}
 
 /// A state of a DFA or NFA.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -52,17 +66,17 @@ where
     }
 }
 
+impl fmt::Debug for Symbol {
+    /// We could just derive, but this avoids newlines in {:#?} output.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Symbol({:?})", self.to_char())
+    }
+}
+
 impl fmt::Debug for State {
     /// We could just derive, but this avoids newlines in {:#?} output.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "State({:?})", self.0)
-    }
-}
-
-impl fmt::Debug for Symbol {
-    /// We could just derive, but this avoids newlines in {:#?} output.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Symbol({:?})", self.0)
     }
 }
 

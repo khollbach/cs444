@@ -66,9 +66,9 @@ where
         let mut token = None;
         let mut state = &self.init;
 
-        for (i, sym) in file.chars().map(Symbol).enumerate() {
+        for (i, sym) in file.chars().map(Symbol::new).enumerate() {
             // todo: properly handle non-ascii error case!
-            assert!(sym.0 < 128 as char, "Non-ascii character: {}", sym.0);
+            assert!(sym.to_char() < 128 as char, "Not ascii: {:?}", sym);
 
             // Don't really need this clone; see comment in `accepts()`.
             state = match self.delta.get(&(state.clone(), sym)) {
@@ -93,11 +93,11 @@ where
     #[cfg(test)]
     pub fn _check(&self, accepted: &[&str], rejected: &[&str]) {
         for s in accepted {
-            assert!(self.accepts(s.chars().map(Symbol)), "{}", s);
+            assert!(self.accepts(s.chars().map(Symbol::new)), "{}", s);
         }
 
         for s in rejected {
-            assert!(!self.accepts(s.chars().map(Symbol)), "{}", s);
+            assert!(!self.accepts(s.chars().map(Symbol::new)), "{}", s);
         }
     }
 }
@@ -105,7 +105,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TokenType::If;
+    use crate::types::Keyword::If;
+    use crate::types::TokenType::Keyword;
 
     /// Helper struct for specifying small DFAs in unit tests.
     struct DFABuilder<'a> {
@@ -121,7 +122,7 @@ mod tests {
             let delta = self
                 .delta
                 .into_iter()
-                .map(|((s, ch), t)| ((s, Symbol(ch)), t))
+                .map(|((s, ch), t)| ((s, Symbol::new(ch)), t))
                 .collect();
 
             DFA {
@@ -136,7 +137,7 @@ mod tests {
     fn simple_dfa() -> DFA<&'static str> {
         DFABuilder {
             init: "init",
-            accepted: vec![("accept", If)],
+            accepted: vec![("accept", Keyword(If))],
             delta: vec![
                 (("init", 'a'), "accept"),
                 (("init", 'b'), "b"),
@@ -164,11 +165,11 @@ mod tests {
         let dfa = simple_dfa();
 
         let a = Token {
-            typ: If,
+            typ: Keyword(If),
             lexeme: "a",
         };
         let ba = Token {
-            typ: If,
+            typ: Keyword(If),
             lexeme: "ba",
         };
 

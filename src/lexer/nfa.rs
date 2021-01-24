@@ -19,7 +19,7 @@ where
     S: Copy + Ord + Hash,
 {
     /// Convert this NFA into an equivalent DFA (they accept the same strings).
-    fn to_dfa(&self) -> DFA<StateSet<S>> {
+    pub fn to_dfa(&self) -> DFA<StateSet<S>> {
         NfaConverter::new(self).to_dfa()
     }
 }
@@ -27,7 +27,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TokenType::If;
+    use crate::types::Keyword::If;
+    use crate::types::TokenType::Keyword;
 
     /// Helper struct for specifying small NFAs in unit tests.
     struct NFABuilder<'a> {
@@ -44,7 +45,7 @@ mod tests {
             let delta = self
                 .delta
                 .into_iter()
-                .map(|((s, ch), t)| ((s, Symbol(ch)), t))
+                .map(|((s, ch), t)| ((s, Symbol::new(ch)), t))
                 .collect();
             let epsilon = self.epsilon.into_iter().collect();
 
@@ -61,7 +62,7 @@ mod tests {
     fn simple_nfa() -> NFA<&'static str> {
         NFABuilder {
             init: "init",
-            accepted: vec![("a1", If), ("aba", If)],
+            accepted: vec![("a1", Keyword(If)), ("aba", Keyword(If))],
             delta: vec![
                 (("init", 'a'), vec!["a1", "a2"]),
                 (("a2", 'b'), vec!["ab"]),
