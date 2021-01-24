@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-/// A token in the output stream of the lexer.
+/// A token in the output stream of the tokenizer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Token<'a> {
     pub typ: TokenType,

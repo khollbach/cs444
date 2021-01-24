@@ -1,8 +1,8 @@
-use lexer::Tokenizer;
 use std::error::Error;
 use std::io::{self, prelude::*};
+use tokenizer::Tokenizer;
 
-mod lexer;
+mod tokenizer;
 mod types;
 
 type Res<T> = Result<T, Box<dyn Error>>;

@@ -1,6 +1,6 @@
-use crate::lexer::dfa::DFA;
-use crate::lexer::nfa_to_dfa::NfaConverter;
-use crate::lexer::types::{StateSet, Symbol};
+use crate::tokenizer::dfa::DFA;
+use crate::tokenizer::nfa_to_dfa::NfaConverter;
+use crate::tokenizer::types::{StateSet, Symbol};
 use crate::types::TokenType;
 use std::collections::HashMap as Map;
 use std::hash::Hash;

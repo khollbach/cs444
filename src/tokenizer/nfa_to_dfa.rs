@@ -1,6 +1,6 @@
-use crate::lexer::dfa::DFA;
-use crate::lexer::nfa::NFA;
-use crate::lexer::types::{StateSet, Symbol};
+use crate::tokenizer::dfa::DFA;
+use crate::tokenizer::nfa::NFA;
+use crate::tokenizer::types::{StateSet, Symbol};
 use crate::types::TokenType;
 use std::collections::{BTreeSet, HashMap as Map, HashSet as Set};
 use std::hash::Hash;

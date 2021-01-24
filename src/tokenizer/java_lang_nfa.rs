@@ -1,5 +1,5 @@
-use crate::lexer::nfa::NFA;
-use crate::lexer::types::{State, Symbol};
+use crate::tokenizer::nfa::NFA;
+use crate::tokenizer::types::{State, Symbol};
 use crate::types::TokenType;
 use crate::types::{Keyword, Literal, Operator, Separator};
 use crate::types::{KEYWORDS, OPERATORS, SEPARATORS};
@@ -70,7 +70,7 @@ impl NFABuilder {
 
     /// Add states (and transitions) to the NFA for recognizing a specific sequence of symbols.
     ///
-    /// This can be used to add a keyword to the lexer, for example.
+    /// This can be used to add a keyword to the tokenizer, for example.
     ///
     /// `s` must be ascii.
     fn exact_match(&mut self, s: &str, token_type: TokenType) {

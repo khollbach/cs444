@@ -1,4 +1,4 @@
-use crate::lexer::types::Symbol;
+use crate::tokenizer::types::Symbol;
 use crate::types::{Token, TokenType};
 use std::collections::HashMap as Map;
 use std::hash::Hash;
@@ -47,7 +47,7 @@ where
                 }
                 // todo: improve error message; include the failed prefix that
                 // was checked in max_munch.
-                None => panic!("Failed to lex {}", suffix),
+                None => panic!("Failed to tokenize {}", suffix),
             }
         }
 
