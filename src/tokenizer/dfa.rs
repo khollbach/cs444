@@ -1,4 +1,5 @@
 use crate::tokenizer::states::AcceptedStateLabel;
+use crate::tokenizer::token_types::{Literal, TokenType};
 use crate::tokenizer::{Position, Symbol, Token};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
@@ -84,12 +85,9 @@ impl<S: Eq + Hash> DFA<S> {
             if let Some(&label) = self.accepted.get(state) {
                 // Keep track of the longest match, and the positions after it.
                 longest_match = Some(match label {
-                    AcceptedStateLabel::Token(type_) => LongestMatch::Token(Token {
-                        type_,
-                        start,
-                        // Note the inclusive range.
-                        lexeme: &start.line[start.col..=pos.col],
-                    }),
+                    AcceptedStateLabel::Token(type_) => {
+                        LongestMatch::Token(Self::make_token(type_, start, pos))
+                    }
                     AcceptedStateLabel::CommentOrWhitespace => LongestMatch::CommentOrWhitespace,
                 });
                 unused_symbols = positions.clone();
@@ -100,6 +98,40 @@ impl<S: Eq + Hash> DFA<S> {
         *positions = unused_symbols;
 
         longest_match
+    }
+
+    /// Create a Token from a token type.
+    ///
+    /// Note that start and end are both inclusive!!!
+    fn make_token<'a>(
+        type_: TokenType<'static>,
+        start: Position<'a>,
+        end: Position<'a>,
+    ) -> Token<'a> {
+        // Note the inclusive range.
+        let lexeme = &start.line[start.col..=end.col];
+
+        // Fill in the guts of the token, if applicable.
+        let type_ = match type_ {
+            TokenType::Identifier(_) => TokenType::Identifier(lexeme),
+            TokenType::Literal(lit) => TokenType::Literal(match lit {
+                Literal::Int(_) => todo!(),
+                Literal::Char(_) => todo!(),
+                Literal::String(_) => {
+                    // Strip quotes.
+                    let s = &lexeme[1..lexeme.len() - 1];
+                    Literal::String(s)
+                }
+                l => l,
+            }),
+            t => t,
+        };
+
+        Token {
+            type_,
+            start,
+            lexeme,
+        }
     }
 }
 

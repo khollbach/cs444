@@ -6,6 +6,8 @@ use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
 use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
 
+mod constants;
+
 /// Generate an NFA that recognizes the lexical grammar of Java (actually Joos 1W, there are some
 /// differences; e.g. no floating point.).
 pub fn java_lang_nfa() -> NFA<State> {
@@ -25,6 +27,10 @@ pub fn java_lang_nfa() -> NFA<State> {
 
     builder.whitespace();
 
+    //builder.comments(); todo
+
+    builder.identifiers();
+
     // todo: Implement the other token types.
     // There are reference NFAs given in the spec, so we can probably just copy those.
     // Make sure to put high-priority tokens above the others,
@@ -33,6 +39,10 @@ pub fn java_lang_nfa() -> NFA<State> {
     builder.nfa
 }
 
+/// An NFA builder for Joos 1W.
+///
+/// We don't do anything fancy with regexes; instead we just hand-code the NFA for each token type.
+/// These NFAs are based on those given in the Java spec, linked on the course webpage.
 struct NFABuilder {
     nfa: NFA<State>,
     num_states: u32,
@@ -100,34 +110,59 @@ impl NFABuilder {
 
     /// Add states to recognize whitespace: any nonempty sequence of ' ', '\t', '\f', '\n'.
     fn whitespace(&mut self) {
-        // (0x0C is ASCII form feed.)
-        let whitespace: Vec<_> = vec![' ', '\t', '\x0C', '\n']
-            .into_iter()
-            .map(|c| Symbol::new(c as u8))
-            .collect();
-
         let first = self.new_state();
         let second = self.new_state();
 
-        // Link `init` to `first` via epsilon transition.
+        // Link to first.
         self.nfa
             .epsilon
             .entry(self.nfa.init)
             .or_default()
             .push(first);
 
-        // Add transitions from first to second.
-        for &sym in &whitespace {
-            self.nfa.delta.insert((first, sym), vec![second]);
-        }
+        // Accept second.
+        let label = AcceptedStateLabel::CommentOrWhitespace;
+        self.nfa.accepted.insert(second, label);
 
-        // Add transitions from second to itself.
-        for &sym in &whitespace {
+        // Add transitions.
+        for sym in constants::whitespace() {
+            // first -> second
+            self.nfa.delta.insert((first, sym), vec![second]);
+
+            // second -> second
+            self.nfa.delta.insert((second, sym), vec![second]);
+        }
+    }
+
+    /// Add states to the NFA for recognizing identifiers. This should be called *after*
+    /// `keywords()` and `literals()`, since ties are broken by which accepting state is smallest.
+    fn identifiers(&mut self) {
+        let first = self.new_state();
+        let second = self.new_state();
+
+        // Link to first.
+        self.nfa
+            .epsilon
+            .entry(self.nfa.init)
+            .or_default()
+            .push(first);
+
+        // Accept second.
+        let s = "-*-java-identifier-*-";
+        let label = AcceptedStateLabel::Token(TokenType::Identifier(s));
+        self.nfa.accepted.insert(second, label);
+
+        for sym in constants::letters() {
+            // first -> second
+            self.nfa.delta.insert((first, sym), vec![second]);
+
+            // second -> second
             self.nfa.delta.insert((second, sym), vec![second]);
         }
 
-        // Add `second` to accepted.
-        let label = AcceptedStateLabel::CommentOrWhitespace;
-        self.nfa.accepted.insert(second, label);
+        for sym in constants::digits() {
+            // second -> second
+            self.nfa.delta.insert((second, sym), vec![second]);
+        }
     }
 }
