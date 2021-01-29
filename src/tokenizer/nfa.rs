@@ -1,7 +1,8 @@
 use crate::tokenizer::dfa::DFA;
 use crate::tokenizer::nfa_to_dfa::NfaConverter;
-use crate::tokenizer::types::{StateSet, Symbol};
-use crate::types::TokenType;
+use crate::tokenizer::states::AcceptedStateLabel;
+use crate::tokenizer::states::StateSet;
+use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
 use std::hash::Hash;
 
@@ -9,15 +10,12 @@ use std::hash::Hash;
 #[derive(Debug)]
 pub struct NFA<S> {
     pub init: S,
-    pub accepted: Map<S, TokenType>,
+    pub accepted: Map<S, AcceptedStateLabel>,
     pub delta: Map<(S, Symbol), Vec<S>>,
     pub epsilon: Map<S, Vec<S>>,
 }
 
-impl<S> NFA<S>
-where
-    S: Copy + Ord + Hash,
-{
+impl<S: Copy + Ord + Hash> NFA<S> {
     /// Convert this NFA into an equivalent DFA (they accept the same strings).
     pub fn to_dfa(&self) -> DFA<StateSet<S>> {
         NfaConverter::new(self).to_dfa()
@@ -27,13 +25,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Keyword::If;
-    use crate::types::TokenType::Keyword;
+    use crate::tokenizer::token_types::Keyword::If;
+    use crate::tokenizer::token_types::TokenType::Keyword;
 
     /// Helper struct for specifying small NFAs in unit tests.
     struct NFABuilder<'a> {
         init: &'a str,
-        accepted: Vec<(&'a str, TokenType)>,
+        accepted: Vec<(&'a str, AcceptedStateLabel)>,
         delta: Vec<((&'a str, char), Vec<&'a str>)>,
         epsilon: Vec<(&'a str, Vec<&'a str>)>,
     }
@@ -45,7 +43,7 @@ mod tests {
             let delta = self
                 .delta
                 .into_iter()
-                .map(|((s, ch), t)| ((s, Symbol::new(ch)), t))
+                .map(|((s, ch), t)| ((s, Symbol::new(ch as u8)), t))
                 .collect();
             let epsilon = self.epsilon.into_iter().collect();
 
@@ -60,9 +58,11 @@ mod tests {
 
     /// This NFA recognizes the language {"a", "ab", "aba"}.
     fn simple_nfa() -> NFA<&'static str> {
+        let if_ = AcceptedStateLabel::Token(Keyword(If));
+
         NFABuilder {
             init: "init",
-            accepted: vec![("a1", Keyword(If)), ("aba", Keyword(If))],
+            accepted: vec![("a1", if_), ("aba", if_)],
             delta: vec![
                 (("init", 'a'), vec!["a1", "a2"]),
                 (("a2", 'b'), vec!["ab"]),

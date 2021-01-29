@@ -1,27 +1,138 @@
-use crate::tokenizer::types::Symbol;
-use crate::types::{Token, TokenType};
+use crate::tokenizer::states::AcceptedStateLabel;
+use crate::tokenizer::{Position, Symbol, Token};
+use key_pair::KeyPair;
 use std::collections::HashMap as Map;
 use std::hash::Hash;
+use std::iter;
+
+mod key_pair;
 
 #[derive(Debug)]
 pub struct DFA<S> {
     pub init: S,
-    pub accepted: Map<S, TokenType>,
+    pub accepted: Map<S, AcceptedStateLabel>,
     pub delta: Map<(S, Symbol), S>,
 }
 
-impl<S> DFA<S>
-where
-    // todo: S shouldn't really need to be clone.
-    S: Clone + Eq + Hash,
-{
+impl<S: Eq + Hash> DFA<S> {
+    /// Tokenize the input stream, stripping out comments and whitespace.
+    // todo: report errors.
+    pub fn tokenize<'a>(
+        &'a self,
+        positions: impl Iterator<Item = Position<'a>> + Clone + 'a,
+    ) -> impl Iterator<Item = Token> + 'a {
+        self.main_loop(positions).flat_map(|longest_match| {
+            match longest_match {
+                LongestMatch::Token(token) => Some(token),
+                // Silently ignore comments and whitespace.
+                LongestMatch::CommentOrWhitespace => None,
+            }
+        })
+    }
+
+    /// Run "max munch" in a loop.
+    fn main_loop<'a>(
+        &'a self,
+        positions: impl Iterator<Item = Position<'a>> + Clone + 'a,
+    ) -> impl Iterator<Item = LongestMatch> + 'a {
+        let mut positions = positions.peekable();
+
+        iter::from_fn(move || {
+            match positions.peek().copied() {
+                // The stream dried up.
+                None => None,
+                Some(pos) => {
+                    let ret = self.max_munch(pos, &mut positions);
+
+                    // todo: handle errors more gracefully.
+                    let longest_match =
+                        ret.unwrap_or_else(|| panic!("Failed to tokenize at {:?}", pos));
+
+                    Some(longest_match)
+                }
+            }
+        })
+    }
+
+    /// Return a token corresponding to the longest matching prefix of the stream.
+    ///
+    /// Consumes up to and including the last symbol of that token.
+    fn max_munch<'a>(
+        &'a self,
+        start: Position<'a>,
+        positions: &mut (impl Iterator<Item = Position<'a>> + Clone),
+    ) -> Option<LongestMatch<'a>> {
+        // Note that we'll never check if the empty string matches, since the code below
+        // transitions states before it checks acceptance.
+        //
+        // (We don't want empty tokens anyways, and handling them would add complexity.)
+        debug_assert!(!self.accepted.contains_key(&self.init));
+
+        let mut longest_match = None;
+        let mut unused_symbols = positions.clone();
+
+        let mut state = &self.init;
+
+        while let Some(pos) = positions.next() {
+            let key = (state, &pos.symbol());
+            state = match self.delta.get(&key as &dyn KeyPair<_, _>) {
+                Some(next) => next,
+                // Implicit "dead" state, stop scanning.
+                None => break,
+            };
+
+            if let Some(&label) = self.accepted.get(state) {
+                // Keep track of the longest match, and the positions after it.
+                longest_match = Some(match label {
+                    AcceptedStateLabel::Token(type_) => LongestMatch::Token(Token {
+                        type_,
+                        start,
+                        // Note the inclusive range.
+                        lexeme: &start.line[start.col..=pos.col],
+                    }),
+                    AcceptedStateLabel::CommentOrWhitespace => LongestMatch::CommentOrWhitespace,
+                });
+                unused_symbols = positions.clone();
+            }
+        }
+
+        // Reset `positions` to reflect which symbols were actually consumed by the longest match.
+        *positions = unused_symbols;
+
+        longest_match
+    }
+}
+
+enum LongestMatch<'a> {
+    Token(Token<'a>),
+    CommentOrWhitespace,
+}
+
+#[cfg(test)]
+impl<S: Eq + Hash> DFA<S> {
+    /// Test helper to assert that the dfa accepts and/or rejects the given ascii strings.
+    ///
+    /// This helps us test NFA to DFA conversion, among other things.
+    pub fn _check(&self, accepted: &[&str], rejected: &[&str]) {
+        fn symbols<'a>(s: &'a str) -> impl Iterator<Item = Symbol> + 'a {
+            s.chars().map(|c| Symbol::new(c as u8))
+        }
+
+        for s in accepted {
+            assert!(self._accepts(symbols(s)), "{}", s);
+        }
+
+        for s in rejected {
+            assert!(!self._accepts(symbols(s)), "{}", s);
+        }
+    }
+
     /// Does this DFA accept this string of symbols?
-    pub fn accepts(&self, symbols: impl Iterator<Item = Symbol>) -> bool {
+    fn _accepts(&self, symbols: impl Iterator<Item = Symbol>) -> bool {
         let mut state = &self.init;
         for sym in symbols {
-            // There doesn't really have to be a clone here; see e.g.:
-            // https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys
-            state = match self.delta.get(&(state.clone(), sym)) {
+            let key = (state, &sym);
+            state = match self.delta.get(&key as &dyn KeyPair<_, _>) {
                 Some(next) => next,
                 // Implicit "dead" state.
                 None => return false,
@@ -29,89 +140,19 @@ where
         }
         self.accepted.contains_key(state)
     }
-
-    /// Runs "max munch" in a loop.
-    // todo: report errors.
-    // todo: make lazy?
-    pub fn tokenize<'a>(&self, file: &'a str) -> Vec<Token<'a>> {
-        let mut res = vec![];
-
-        let mut suffix = file;
-        while !suffix.is_empty() {
-            match self.max_munch(suffix) {
-                Some(token) => {
-                    // Advance the pointer into the file, consuming the token.
-                    suffix = &suffix[token.lexeme.len()..];
-
-                    res.push(token);
-                }
-                // todo: improve error message; include the failed prefix that
-                // was checked in max_munch.
-                None => panic!("Failed to tokenize {}", suffix),
-            }
-        }
-
-        res
-    }
-
-    /// Returns the longest prefix of `file` that matches.
-    fn max_munch<'a>(&self, file: &'a str) -> Option<Token<'a>> {
-        // Note that we never check if the empty string matches,
-        // since the code below always transitions before checking.
-        //
-        // We don't want empty tokens anyways, and handling them
-        // would add complexity.
-        debug_assert!(!self.accepted.contains_key(&self.init));
-
-        let mut token = None;
-        let mut state = &self.init;
-
-        for (i, sym) in file.chars().map(Symbol::new).enumerate() {
-            // todo: properly handle non-ascii error case!
-            assert!(sym.to_char() < 128 as char, "Not ascii: {:?}", sym);
-
-            // Don't really need this clone; see comment in `accepts()`.
-            state = match self.delta.get(&(state.clone(), sym)) {
-                Some(next) => next,
-                // Implicit "dead" state, stop scanning.
-                None => break,
-            };
-
-            if let Some(&typ) = self.accepted.get(state) {
-                token = Some(Token {
-                    typ,
-                    // Note the off-by-one here.
-                    lexeme: &file[..=i],
-                });
-            }
-        }
-
-        token
-    }
-
-    /// Test helper to assert that the dfa accepts and/or rejects the given strings.
-    #[cfg(test)]
-    pub fn _check(&self, accepted: &[&str], rejected: &[&str]) {
-        for s in accepted {
-            assert!(self.accepts(s.chars().map(Symbol::new)), "{}", s);
-        }
-
-        for s in rejected {
-            assert!(!self.accepts(s.chars().map(Symbol::new)), "{}", s);
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Keyword::If;
-    use crate::types::TokenType::Keyword;
+    use crate::tokenizer;
+    use crate::tokenizer::token_types::Keyword::If;
+    use crate::tokenizer::token_types::TokenType::Keyword;
 
     /// Helper struct for specifying small DFAs in unit tests.
     struct DFABuilder<'a> {
         init: &'a str,
-        accepted: Vec<(&'a str, TokenType)>,
+        accepted: Vec<(&'a str, AcceptedStateLabel)>,
         delta: Vec<((&'a str, char), &'a str)>,
     }
 
@@ -122,7 +163,7 @@ mod tests {
             let delta = self
                 .delta
                 .into_iter()
-                .map(|((s, ch), t)| ((s, Symbol::new(ch)), t))
+                .map(|((s, ch), t)| ((s, Symbol::new(ch as u8)), t))
                 .collect();
 
             DFA {
@@ -137,7 +178,7 @@ mod tests {
     fn simple_dfa() -> DFA<&'static str> {
         DFABuilder {
             init: "init",
-            accepted: vec![("accept", Keyword(If))],
+            accepted: vec![("accept", AcceptedStateLabel::Token(Keyword(If)))],
             delta: vec![
                 (("init", 'a'), "accept"),
                 (("init", 'b'), "b"),
@@ -159,33 +200,29 @@ mod tests {
         dfa._check(&accepted, &rejected);
     }
 
+    /// Run the DFA on one line of ASCII text, to tokenize it.
+    fn tokenize_one_line<'a>(dfa: &'a DFA<&'a str>, line: &'a str) -> Vec<Token<'a>> {
+        let positions = tokenizer::all_positions(iter::once(line));
+
+        // Skip the special "newline" position at the end of `all_positions`.
+        let positions = positions.take(line.len());
+
+        dfa.tokenize(positions).collect()
+    }
+
     /// Tokenize a short string of a's and b's.
     #[test]
-    fn simple_tokenize() {
+    #[allow(non_snake_case)]
+    fn tokenize_As_and_Bs() {
         let dfa = simple_dfa();
 
-        let a = Token {
-            typ: Keyword(If),
-            lexeme: "a",
-        };
-        let ba = Token {
-            typ: Keyword(If),
-            lexeme: "ba",
-        };
-
         let input = "abaaababa";
-        let expected = Some(a);
-        let actual = dfa.max_munch(input);
-        assert_eq!(expected, actual);
+        let expected = vec!["a", "ba", "a", "a", "ba", "ba"];
 
-        let input = "baaababa";
-        let expected = Some(ba);
-        let actual = dfa.max_munch(input);
-        assert_eq!(expected, actual);
-
-        let input = "abaaababa";
-        let expected = vec![a, ba, a, a, ba, ba];
-        let actual = dfa.tokenize(input);
+        let mut actual = vec![];
+        for token in tokenize_one_line(&dfa, input) {
+            actual.push(token.lexeme);
+        }
         assert_eq!(expected, actual);
     }
 
@@ -196,6 +233,8 @@ mod tests {
         let dfa = simple_dfa();
 
         let input = "abaaababab";
-        dfa.tokenize(input);
+
+        // todo this test will fail once we implement robust error handling; fix it then.
+        tokenize_one_line(&dfa, input);
     }
 }

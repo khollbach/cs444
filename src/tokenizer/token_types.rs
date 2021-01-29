@@ -3,19 +3,12 @@
 
 use std::fmt;
 
-/// A token in the output stream of the tokenizer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Token<'a> {
-    pub typ: TokenType,
-    pub lexeme: &'a str,
-}
-
 /// Diffent types of tokens in the language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenType {
+pub enum TokenType<'a> {
     Ident,
     Keyword(Keyword),
-    Literal(Literal),
+    Literal(Literal<'a>),
     Separator(Separator),
     Operator(Operator),
 }
@@ -73,11 +66,11 @@ pub enum Keyword {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Literal {
-    //Int(u32),
+pub enum Literal<'a> {
+    Int(u32),
     Bool(bool),
-    //Char(char),
-    //String(&str),
+    Char(char),
+    String(&'a str),
     Null,
 }
 

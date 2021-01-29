@@ -1,10 +1,13 @@
 use crate::tokenizer::nfa::NFA;
-use crate::tokenizer::types::{State, Symbol};
-use crate::types::TokenType;
-use crate::types::{Keyword, Literal, Operator, Separator};
-use crate::types::{KEYWORDS, OPERATORS, SEPARATORS};
+use crate::tokenizer::states::{AcceptedStateLabel, State};
+use crate::tokenizer::token_types::TokenType;
+use crate::tokenizer::token_types::{Keyword, Operator, Separator};
+use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
+use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
 
+/// Generate an NFA that recognizes the lexical grammar of Java (actually Joos 1W, there are some
+/// differences; e.g. no floating point.).
 pub fn java_lang_nfa() -> NFA<State> {
     let mut builder = NFABuilder::new();
 
@@ -20,9 +23,7 @@ pub fn java_lang_nfa() -> NFA<State> {
         builder.operator(op);
     }
 
-    // todo: These are just placeholders, until I properly implement whitespace.
-    builder.exact_match(" ", TokenType::Literal(Literal::Bool(false)));
-    builder.exact_match("\n", TokenType::Literal(Literal::Bool(true)));
+    builder.whitespace();
 
     // todo: Implement the other token types.
     // There are reference NFAs given in the spec, so we can probably just copy those.
@@ -73,7 +74,7 @@ impl NFABuilder {
     /// This can be used to add a keyword to the tokenizer, for example.
     ///
     /// `s` must be ascii.
-    fn exact_match(&mut self, s: &str, token_type: TokenType) {
+    fn exact_match(&mut self, s: &str, token_type: TokenType<'static>) {
         assert!(!s.is_empty());
 
         // Create an "initial" state for this token type.
@@ -86,68 +87,47 @@ impl NFABuilder {
             .push(first);
 
         let mut prev = first;
-        for c in s.chars() {
+        for sym in s.as_bytes().iter().copied().map(Symbol::new) {
             let curr = self.new_state();
-            self.nfa
-                .delta
-                .entry((prev, Symbol::new(c)))
-                .or_default()
-                .push(curr);
+            self.nfa.delta.entry((prev, sym)).or_default().push(curr);
             prev = curr;
         }
 
         // Accept the final state for this token type.
-        self.nfa.accepted.insert(prev, token_type);
+        let label = AcceptedStateLabel::Token(token_type);
+        self.nfa.accepted.insert(prev, label);
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::Keyword::{Else, If, While};
-    use crate::types::Literal::Bool;
-    use crate::types::Operator::{Assign, Le};
-    use crate::types::Separator::{Comma, Dot, LBrace};
-    use crate::types::TokenType::{Keyword, Literal, Operator, Separator};
+    /// Add states to recognize whitespace: any nonempty sequence of ' ', '\t', '\f', '\n'.
+    fn whitespace(&mut self) {
+        // (0x0C is ASCII form feed.)
+        let whitespace: Vec<_> = vec![' ', '\t', '\x0C', '\n']
+            .into_iter()
+            .map(|c| Symbol::new(c as u8))
+            .collect();
 
-    /// Run a few simple examples; each should be successfully tokenized.
-    #[test]
-    fn tokenize_simple_examples() {
-        // todo: remove or change this to pass once you implement whitespace.
-        let sp = Literal(Bool(false));
-        let nl = Literal(Bool(true));
+        let first = self.new_state();
+        let second = self.new_state();
 
-        for (input, expected) in vec![
-            (
-                "if while else",
-                vec![Keyword(If), sp, Keyword(While), sp, Keyword(Else)],
-            ),
-            (
-                "if while\nelse",
-                vec![Keyword(If), sp, Keyword(While), nl, Keyword(Else)],
-            ),
-            (
-                "if{ ,.<==\n",
-                vec![
-                    Keyword(If),
-                    Separator(LBrace),
-                    sp,
-                    Separator(Comma),
-                    Separator(Dot),
-                    Operator(Le),
-                    Operator(Assign),
-                    nl,
-                ],
-            ),
-        ] {
-            let nfa = java_lang_nfa();
-            let dfa = nfa.to_dfa();
+        // Link `init` to `first` via epsilon transition.
+        self.nfa
+            .epsilon
+            .entry(self.nfa.init)
+            .or_default()
+            .push(first);
 
-            let mut actual = vec![];
-            for token in dfa.tokenize(&input) {
-                actual.push(token.typ);
-            }
-            assert_eq!(expected, actual);
+        // Add transitions from first to second.
+        for &sym in &whitespace {
+            self.nfa.delta.insert((first, sym), vec![second]);
         }
+
+        // Add transitions from second to itself.
+        for &sym in &whitespace {
+            self.nfa.delta.insert((second, sym), vec![second]);
+        }
+
+        // Add `second` to accepted.
+        let label = AcceptedStateLabel::CommentOrWhitespace;
+        self.nfa.accepted.insert(second, label);
     }
 }

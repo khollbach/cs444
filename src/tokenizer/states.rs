@@ -1,32 +1,29 @@
+use crate::tokenizer::token_types::TokenType;
 use std::fmt;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
-/// A symbol in the input stream to a DFA or NFA.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol {
-    c: char,
-}
-
-impl Symbol {
-    /// `c` must be ASCII.
-    pub fn new(c: char) -> Self {
-        debug_assert!(c < 128 as char);
-        Self { c }
-    }
-
-    pub fn to_char(self) -> char {
-        self.c
-    }
+/// Used in NFAs and DFAs to label each accepted state with the token type it accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcceptedStateLabel {
+    Token(TokenType<'static>),
+    CommentOrWhitespace,
 }
 
 /// A state of a DFA or NFA.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct State(pub u32);
 
+impl fmt::Debug for State {
+    /// We could just derive, but this avoids newlines in {:#?} output.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "State({:?})", self.0)
+    }
+}
+
 /// A sorted, unique list of states.
 ///
-/// We use these as the states of a DFA generated from an NFA.
+/// We use these as the states of a DFA generated from an NFA via the "powerset" construction.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct StateSet<S> {
     states: Rc<[S]>,
@@ -49,6 +46,12 @@ where
         ss
     }
 
+    /// Check if the states are sorted, strictly increasing.
+    #[must_use]
+    fn _is_sorted_unique(&self) -> bool {
+        (1..self.states.len()).all(|i| self.states[i - 1] < self.states[i])
+    }
+
     /// Get the inner states.
     pub fn states(&self) -> &[S] {
         &self.states
@@ -57,26 +60,6 @@ where
     /// Just an alias for `clone`, because `S` is Copy and `Rc` clones are cheap.
     pub fn copy(&self) -> Self {
         self.clone()
-    }
-
-    /// Check if the states are strictly increasing.
-    #[must_use]
-    fn _is_sorted_unique(&self) -> bool {
-        (1..self.states.len()).all(|i| self.states[i - 1] < self.states[i])
-    }
-}
-
-impl fmt::Debug for Symbol {
-    /// We could just derive, but this avoids newlines in {:#?} output.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Symbol({:?})", self.to_char())
-    }
-}
-
-impl fmt::Debug for State {
-    /// We could just derive, but this avoids newlines in {:#?} output.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "State({:?})", self.0)
     }
 }
 
