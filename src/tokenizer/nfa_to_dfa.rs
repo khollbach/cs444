@@ -1,3 +1,5 @@
+//! The logic in this file is tested indirectly, in the `nfa` module.
+
 use crate::tokenizer::dfa::DFA;
 use crate::tokenizer::nfa::NFA;
 use crate::tokenizer::states::{AcceptedStateLabel, StateSet};

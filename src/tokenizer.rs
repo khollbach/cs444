@@ -19,6 +19,7 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
+    /// Zero-indexed, exclusive.
     pub fn end_col(self) -> usize {
         // Relies on the token being ASCII-only.
         self.start.col + self.lexeme.len()
@@ -135,21 +136,55 @@ mod tests {
     use super::*;
     use token_types::Keyword::{Else, If, While};
     use token_types::Operator::{Assign, Le};
-    use token_types::Separator::{Comma, Dot, LBrace};
+    use token_types::Separator::{Comma, Dot, LBrace, RBrace};
     use token_types::TokenType::{Keyword, Operator, Separator};
 
-    /// Run a few simple examples; each should be successfully tokenized.
+    /// A test case for the tokenizer. Only the token types are validated.
+    pub struct TestCase {
+        pub input: Vec<&'static str>,
+        pub expected_output: Vec<TokenType<'static>>,
+    }
+
+    impl TestCase {
+        /// Panics if the input doesn't tokenize as expected.
+        pub fn run(self, tokenizer: &Tokenizer) {
+            let mut actual = vec![];
+            for token in tokenizer.tokenize(self.input.into_iter()) {
+                actual.push(token.type_);
+            }
+            assert_eq!(self.expected_output, actual);
+        }
+    }
+
+    /// A test case for the tokenizer.
+    ///
+    /// Every detail of every token is validated. This is a better test, but also more tedious to
+    /// specify.
+    struct DetailedTestCase {
+        input: Vec<&'static str>,
+        expected_output: Vec<Token<'static>>,
+    }
+
+    impl DetailedTestCase {
+        /// Panics if the input doesn't tokenize as expected.
+        fn run(self, tokenizer: &Tokenizer) {
+            let actual: Vec<_> = tokenizer.tokenize(self.input.into_iter()).collect();
+            assert_eq!(self.expected_output, actual);
+        }
+    }
+
+    /// Run a few simple examples.
     #[test]
-    fn tokenize_simple_examples() {
+    fn simple_examples() {
         let tokenizer = Tokenizer::new();
 
-        for (input, expected) in vec![
+        for (input, expected_output) in vec![
             (
                 vec!["if while else"],
                 vec![Keyword(If), Keyword(While), Keyword(Else)],
             ),
             (
-                vec!["if while", "else"],
+                vec![" \t if while", "", "  else", " ", "", "\t"],
                 vec![Keyword(If), Keyword(While), Keyword(Else)],
             ),
             (
@@ -164,11 +199,77 @@ mod tests {
                 ],
             ),
         ] {
-            let mut actual = vec![];
-            for token in tokenizer.tokenize(input.into_iter()) {
-                actual.push(token.type_);
+            TestCase {
+                input,
+                expected_output,
             }
-            assert_eq!(expected, actual);
+            .run(&tokenizer);
         }
+    }
+
+    /// Run a detailed example.
+    #[test]
+    fn detailed_example() {
+        let tokenizer = Tokenizer::new();
+
+        let input = vec!["if while else", "", "{}"];
+
+        let if_ = Token {
+            type_: Keyword(If),
+            start: Position {
+                line: input[0],
+                line_num: 0,
+                col: 0,
+            },
+            lexeme: "if",
+        };
+
+        let while_ = Token {
+            type_: Keyword(While),
+            start: Position {
+                line: input[0],
+                line_num: 0,
+                col: 3,
+            },
+            lexeme: "while",
+        };
+
+        let else_ = Token {
+            type_: Keyword(Else),
+            start: Position {
+                line: input[0],
+                line_num: 0,
+                col: 9,
+            },
+            lexeme: "else",
+        };
+
+        let left = Token {
+            type_: Separator(LBrace),
+            start: Position {
+                line: input[2],
+                line_num: 2,
+                col: 0,
+            },
+            lexeme: "{",
+        };
+
+        let right = Token {
+            type_: Separator(RBrace),
+            start: Position {
+                line: input[2],
+                line_num: 2,
+                col: 1,
+            },
+            lexeme: "}",
+        };
+
+        let expected_output = vec![if_, while_, else_, left, right];
+
+        DetailedTestCase {
+            input,
+            expected_output,
+        }
+        .run(&tokenizer);
     }
 }

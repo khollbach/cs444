@@ -12,6 +12,10 @@ pub fn letters() -> impl Iterator<Item = Symbol> {
     LETTERS.iter().map(|&c| Symbol::new(c as u8))
 }
 
+pub fn all_symbols() -> impl Iterator<Item = Symbol> {
+    (0..128).map(|b| Symbol::new(b))
+}
+
 /// As defined in the Java spec.
 ///
 /// (0x0C is ASCII form feed.)

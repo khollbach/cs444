@@ -115,12 +115,12 @@ impl<S: Eq + Hash> DFA<S> {
         let type_ = match type_ {
             TokenType::Identifier(_) => TokenType::Identifier(lexeme),
             TokenType::Literal(lit) => TokenType::Literal(match lit {
-                Literal::Int(_) => todo!(),
-                Literal::Char(_) => todo!(),
+                Literal::Int(_) => todo!(),  // parse ints.
+                Literal::Char(_) => todo!(), // check length; handle escape seq'ces.
                 Literal::String(_) => {
                     // Strip quotes.
                     let s = &lexeme[1..lexeme.len() - 1];
-                    Literal::String(s)
+                    Literal::String(s) // todo: handle escape seq'ces.
                 }
                 l => l,
             }),
