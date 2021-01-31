@@ -71,7 +71,7 @@ pub enum Literal<'a> {
     /// Escape characters (if any) have been resolved.
     Char(char),
     /// Escape characters (if any) have been resolved.
-    String(&'a str),
+    StringLit(&'a str),
     Null,
 }
 

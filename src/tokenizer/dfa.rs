@@ -1,4 +1,5 @@
 use crate::tokenizer::states::AcceptedStateLabel;
+use crate::tokenizer::token_types::Literal::StringLit;
 use crate::tokenizer::token_types::{Literal, TokenType};
 use crate::tokenizer::{Position, Symbol, Token};
 use key_pair::KeyPair;
@@ -138,13 +139,13 @@ impl<S: Eq + Hash> DFA<S> {
                     assert_eq!(b.len(), 1);
                     Literal::Char(b[0] as char)
                 }
-                Literal::String(_) => {
+                StringLit(_) => {
                     // Strip quotes.
                     debug_assert_eq!(&lexeme[..1], "\"");
                     debug_assert_eq!(&lexeme[lexeme.len() - 1..], "\"");
                     let s = &lexeme[1..lexeme.len() - 1];
 
-                    Literal::String(s) // todo: handle escape seq'ces.
+                    StringLit(s) // todo: handle escape seq'ces.
                 }
                 l => l,
             }),

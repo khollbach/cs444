@@ -2,11 +2,10 @@ use crate::tokenizer::nfa::NFA;
 use crate::tokenizer::states::AcceptedStateLabel::CommentOrWhitespace;
 use crate::tokenizer::states::AcceptedStateLabel::Token as AcceptedToken;
 use crate::tokenizer::states::{AcceptedStateLabel, State};
-use crate::tokenizer::token_types::TokenType::{
-    Identifier as TTIdentifier, Keyword as TTKeyword, Literal as TTLiteral, Operator as TTOperator,
-    Separator as TTSeparator,
-};
-use crate::tokenizer::token_types::{Keyword, Literal, Operator, Separator, TokenType};
+use crate::tokenizer::token_types::Literal::{Bool, Char, Int, Null, StringLit};
+use crate::tokenizer::token_types::TokenType as TT;
+use crate::tokenizer::token_types::TokenType::{Identifier, Literal};
+use crate::tokenizer::token_types::{Keyword, Operator, Separator, TokenType};
 use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
 use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
@@ -96,17 +95,17 @@ impl NFABuilder {
 
     /// Add a keyword to the NFA.
     fn keyword(&mut self, k: Keyword) {
-        self.exact_match(&k.to_string(), TTKeyword(k));
+        self.exact_match(&k.to_string(), TT::Keyword(k));
     }
 
     /// Add a separator to the NFA.
     fn separator(&mut self, sep: Separator) {
-        self.exact_match(&sep.to_string(), TTSeparator(sep));
+        self.exact_match(&sep.to_string(), TT::Separator(sep));
     }
 
     /// Add an operator to the NFA.
     fn operator(&mut self, op: Operator) {
-        self.exact_match(&op.to_string(), TTOperator(op));
+        self.exact_match(&op.to_string(), TT::Operator(op));
     }
 
     /// Add states and transitions to the NFA for recognizing a specific sequence of symbols.
@@ -153,7 +152,7 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = AcceptedToken(TTLiteral(Literal::Int(0)));
+        let label = AcceptedToken(Literal(Int(0)));
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -170,7 +169,7 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = 55555;
-        let label = AcceptedToken(TTLiteral(Literal::Int(filler)));
+        let label = AcceptedToken(Literal(Int(filler)));
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -189,21 +188,21 @@ impl NFABuilder {
     /// Boolean literals `true` and `false`. The accepted states are labelled with the
     /// corresponding boolean values.
     fn bools(&mut self) {
-        self.exact_match("false", TTLiteral(Literal::Bool(false)));
-        self.exact_match("true", TTLiteral(Literal::Bool(true)));
+        self.exact_match("false", Literal(Bool(false)));
+        self.exact_match("true", Literal(Bool(true)));
     }
 
     /// Recognize string literals.
     fn strings(&mut self) {
         let filler = "-*-java-string-literal-*-";
-        let label = AcceptedToken(TTLiteral(Literal::String(filler)));
+        let label = AcceptedToken(Literal(StringLit(filler)));
         self.strings_or_chars('"', label);
     }
 
     /// Recognize character literals.
     fn chars(&mut self) {
         let filler = '?';
-        let label = AcceptedToken(TTLiteral(Literal::Char(filler)));
+        let label = AcceptedToken(Literal(Char(filler)));
         self.strings_or_chars('\'', label);
     }
 
@@ -252,7 +251,7 @@ impl NFABuilder {
 
     /// `null` literal. Basically a keyword as far as the tokenizer is concerned.
     fn null(&mut self) {
-        self.exact_match("null", TTLiteral(Literal::Null));
+        self.exact_match("null", Literal(Null));
     }
 
     /// Add states to the NFA for recognizing identifiers. This should be called *after*
@@ -264,7 +263,7 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = "-*-java-identifier-*-";
-        let label = AcceptedToken(TTIdentifier(filler));
+        let label = AcceptedToken(Identifier(filler));
         self.nfa.accepted.insert(end, label);
 
         for sym in constants::letters() {
@@ -408,7 +407,7 @@ enum StarCommentType {
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::tests::TestCase;
-    use crate::tokenizer::token_types::Literal::String as StringLit;
+    use crate::tokenizer::token_types::Literal::StringLit;
     use crate::tokenizer::token_types::TokenType::Literal;
     use crate::tokenizer::Tokenizer;
 
