@@ -1,6 +1,3 @@
-// For now, so we don't get "unused variant" warnings:
-#![allow(dead_code)]
-
 use std::fmt;
 
 /// Diffent types of tokens in the language.
@@ -67,9 +64,13 @@ pub enum Keyword {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Literal<'a> {
+    /// Anywhere in 0..=2^31, but 2^31 should fail to parse unless it is preceeded by a unary
+    /// negation operator.
     Int(u32),
     Bool(bool),
+    /// Escape characters (if any) have been resolved.
     Char(char),
+    /// Escape characters (if any) have been resolved.
     String(&'a str),
     Null,
 }

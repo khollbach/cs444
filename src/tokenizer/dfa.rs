@@ -40,7 +40,7 @@ impl<S: Eq + Hash> DFA<S> {
 
         iter::from_fn(move || {
             match positions.peek().copied() {
-                // The stream dried up.
+                // The stream dried up; terminate.
                 None => None,
                 Some(pos) => {
                     let ret = self.max_munch(pos, &mut positions);
@@ -115,11 +115,35 @@ impl<S: Eq + Hash> DFA<S> {
         let type_ = match type_ {
             TokenType::Identifier(_) => TokenType::Identifier(lexeme),
             TokenType::Literal(lit) => TokenType::Literal(match lit {
-                Literal::Int(_) => todo!(),  // parse ints.
-                Literal::Char(_) => todo!(), // check length; handle escape seq'ces.
+                Literal::Int(_) => {
+                    // Note that in Joos 1W, all int literals are `int` type, since there is no
+                    // `unsigned` in Java, and no `long` in Joos 1W.
+                    let n: Result<u32, _> = lexeme.parse();
+
+                    // todo handle errors gracefully
+                    let n = n.expect("Can't parse int; probably too big.");
+                    assert!(n <= 2u32.pow(31));
+
+                    Literal::Int(n)
+                }
+                Literal::Char(_) => {
+                    // Strip quotes.
+                    let bytes = lexeme.as_bytes();
+                    debug_assert_eq!(bytes[0], b'\'');
+                    debug_assert_eq!(bytes[bytes.len() - 1], b'\'');
+                    let b = &bytes[1..bytes.len() - 1];
+
+                    // todo: handle escape seq'ces, and check length (which can be != 1 btw)
+                    // (and handle these errors gracefully)
+                    assert_eq!(b.len(), 1);
+                    Literal::Char(b[0] as char)
+                }
                 Literal::String(_) => {
                     // Strip quotes.
+                    debug_assert_eq!(&lexeme[..1], "\"");
+                    debug_assert_eq!(&lexeme[lexeme.len() - 1..], "\"");
                     let s = &lexeme[1..lexeme.len() - 1];
+
                     Literal::String(s) // todo: handle escape seq'ces.
                 }
                 l => l,

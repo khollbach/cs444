@@ -113,7 +113,58 @@ impl NFABuilder {
     }
 
     fn ints(&mut self) {
-        //todo!()
+        self.zero();
+        self.non_zero();
+    }
+
+    /// Add states to recognize the zero literal: `0`.
+    fn zero(&mut self) {
+        let start = self.new_state();
+        let end = self.new_state();
+
+        self.nfa
+            .epsilon
+            .entry(self.nfa.init)
+            .or_default()
+            .push(start);
+        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(0)));
+        self.nfa.accepted.insert(end, label);
+
+        // start -> end
+        self.nfa
+            .delta
+            .entry((start, Symbol::new(b'0')))
+            .or_default()
+            .push(end);
+    }
+
+    /// Add states to recognize non-zero int literals, e.g. `10234`.
+    ///
+    /// Always positive, since unary negation is lexed separately.
+    fn non_zero(&mut self) {
+        let start = self.new_state();
+        let end = self.new_state();
+
+        self.nfa
+            .epsilon
+            .entry(self.nfa.init)
+            .or_default()
+            .push(start);
+        let filler = 55555;
+        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(filler)));
+        self.nfa.accepted.insert(end, label);
+
+        // start -> end
+        for sym in constants::digits() {
+            if sym.to_char() != '0' {
+                self.nfa.delta.entry((start, sym)).or_default().push(end);
+            }
+        }
+
+        // end -> end
+        for sym in constants::digits() {
+            self.nfa.delta.entry((end, sym)).or_default().push(end);
+        }
     }
 
     /// Boolean literals `true` and `false`. The accepted states are labelled with the
