@@ -45,6 +45,7 @@ struct NFABuilder {
 }
 
 impl NFABuilder {
+    /// A new NFA with just an initial state.
     fn new() -> Self {
         Self {
             num_states: 1,
@@ -57,53 +58,75 @@ impl NFABuilder {
         }
     }
 
+    /// Add a new state to the NFA, with increasing sequence numbers.
+    ///
+    /// (The state itself isn't actually stored in the NFA, but this helps us make sure states are
+    /// unique.)
     fn new_state(&mut self) -> State {
         let state = State(self.num_states);
         self.num_states += 1;
         state
     }
 
-    fn keyword(&mut self, k: Keyword) {
-        self.exact_match(&k.to_string(), TokenType::Keyword(k));
-    }
-
-    fn separator(&mut self, sep: Separator) {
-        self.exact_match(&sep.to_string(), TokenType::Separator(sep));
-    }
-
-    fn operator(&mut self, op: Operator) {
-        self.exact_match(&op.to_string(), TokenType::Operator(op));
-    }
-
-    /// Add states (and transitions) to the NFA for recognizing a specific sequence of symbols.
-    ///
-    /// This can be used to add a keyword to the tokenizer, for example.
-    ///
-    /// `s` must be ascii.
-    fn exact_match(&mut self, s: &str, token_type: TokenType<'static>) {
-        assert!(!s.is_empty());
-
-        // Create an "initial" state for this token type.
-        // Link `init` to it via an epsilon transition.
-        let first = self.new_state();
+    /// Link from `init` to `start` via an epsilon transition.
+    fn eps(&mut self, start: State) {
         self.nfa
             .epsilon
             .entry(self.nfa.init)
             .or_default()
-            .push(first);
+            .push(start);
+    }
 
-        let mut prev = first;
-        for sym in s.as_bytes().iter().copied().map(Symbol::new) {
+    /// Add a delta transition to the NFA.
+    fn delta(&mut self, src: State, sym: Symbol, dest: State) {
+        self.nfa.delta.entry((src, sym)).or_default().push(dest);
+    }
+
+    /// Add a delta transition to the NFA, given an ASCII char.
+    fn delta_char(&mut self, src: State, ch: char, dest: State) {
+        assert!(ch < 128 as char);
+        let sym = Symbol::new(ch as u8);
+        self.delta(src, sym, dest);
+    }
+
+    /// Add a keyword to the NFA.
+    fn keyword(&mut self, k: Keyword) {
+        self.exact_match(&k.to_string(), TokenType::Keyword(k));
+    }
+
+    /// Add a separator to the NFA.
+    fn separator(&mut self, sep: Separator) {
+        self.exact_match(&sep.to_string(), TokenType::Separator(sep));
+    }
+
+    /// Add an operator to the NFA.
+    fn operator(&mut self, op: Operator) {
+        self.exact_match(&op.to_string(), TokenType::Operator(op));
+    }
+
+    /// Add states and transitions to the NFA for recognizing a specific sequence of symbols.
+    ///
+    /// This can be used to add a keyword to the tokenizer, for example. `s` must be ascii.
+    ///
+    /// Basically, this just generates a linked list of states.
+    fn exact_match(&mut self, s: &str, token_type: TokenType<'static>) {
+        assert!(!s.is_empty());
+
+        let start = self.new_state();
+        self.eps(start);
+
+        let mut prev = start;
+        for c in s.chars() {
             let curr = self.new_state();
-            self.nfa.delta.entry((prev, sym)).or_default().push(curr);
+            self.delta_char(prev, c, curr);
             prev = curr;
         }
 
-        // Accept the final state for this token type.
         let label = AcceptedStateLabel::Token(token_type);
         self.nfa.accepted.insert(prev, label);
     }
 
+    /// Add all types of literals to the NFA.
     fn literals(&mut self) {
         self.ints();
         self.bools();
@@ -112,6 +135,7 @@ impl NFABuilder {
         self.null();
     }
 
+    /// Add int literals to the NFA.
     fn ints(&mut self) {
         self.zero();
         self.non_zero();
@@ -122,20 +146,13 @@ impl NFABuilder {
         let start = self.new_state();
         let end = self.new_state();
 
-        self.nfa
-            .epsilon
-            .entry(self.nfa.init)
-            .or_default()
-            .push(start);
+        self.eps(start);
+
         let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(0)));
         self.nfa.accepted.insert(end, label);
 
         // start -> end
-        self.nfa
-            .delta
-            .entry((start, Symbol::new(b'0')))
-            .or_default()
-            .push(end);
+        self.delta_char(start, '0', end);
     }
 
     /// Add states to recognize non-zero int literals, e.g. `10234`.
@@ -145,11 +162,8 @@ impl NFABuilder {
         let start = self.new_state();
         let end = self.new_state();
 
-        self.nfa
-            .epsilon
-            .entry(self.nfa.init)
-            .or_default()
-            .push(start);
+        self.eps(start);
+
         let filler = 55555;
         let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(filler)));
         self.nfa.accepted.insert(end, label);
@@ -157,13 +171,13 @@ impl NFABuilder {
         // start -> end
         for sym in constants::digits() {
             if sym.to_char() != '0' {
-                self.nfa.delta.entry((start, sym)).or_default().push(end);
+                self.delta(start, sym, end);
             }
         }
 
         // end -> end
         for sym in constants::digits() {
-            self.nfa.delta.entry((end, sym)).or_default().push(end);
+            self.delta(end, sym, end);
         }
     }
 
@@ -178,59 +192,43 @@ impl NFABuilder {
     fn strings(&mut self) {
         let filler = "-*-java-string-literal-*-";
         let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::String(filler)));
-        self.strings_or_chars(Symbol::new(b'"'), label);
+        self.strings_or_chars('"', label);
     }
 
     /// Recognize character literals.
     fn chars(&mut self) {
         let filler = '?';
         let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Char(filler)));
-        self.strings_or_chars(Symbol::new(b'\''), label);
+        self.strings_or_chars('\'', label);
     }
 
     /// Helper function for `self.strings()` and `self.chars()`, so I don't repeat myself.
     ///
     /// Add states to the NFA to recognize either string literals or char literals.
-    fn strings_or_chars(&mut self, quote: Symbol, label: AcceptedStateLabel) {
+    fn strings_or_chars(&mut self, quote: char, label: AcceptedStateLabel) {
         let start = self.new_state();
         let inner = self.new_state();
         let odd_backslash = self.new_state(); // "I've just seen an *odd* number of backslashes."
         let end = self.new_state();
 
         // Link to start; accept end.
-        self.nfa
-            .epsilon
-            .entry(self.nfa.init)
-            .or_default()
-            .push(start);
+        self.eps(start);
         self.nfa.accepted.insert(end, label);
 
         // start -> inner
+        self.delta_char(start, quote, inner);
+
         // inner -> end
-        self.nfa
-            .delta
-            .entry((start, quote))
-            .or_default()
-            .push(inner);
-        self.nfa.delta.entry((inner, quote)).or_default().push(end);
+        self.delta_char(inner, quote, end);
 
         // inner -> odd_backslash
-        let bslash = Symbol::new(b'\\');
-        self.nfa
-            .delta
-            .entry((inner, bslash))
-            .or_default()
-            .push(odd_backslash);
+        self.delta_char(inner, '\\', odd_backslash);
 
         // odd_backslash -> inner
         // Everything except newline (which by ommission leads to the implicit "dead" state).
         for sym in constants::all_symbols() {
             if sym.to_char() != '\n' {
-                self.nfa
-                    .delta
-                    .entry((odd_backslash, sym))
-                    .or_default()
-                    .push(inner);
+                self.delta(odd_backslash, sym, inner);
             }
         }
 
@@ -241,7 +239,7 @@ impl NFABuilder {
             match sym.to_char() {
                 '"' | '\\' | '\n' => (),
                 _ => {
-                    self.nfa.delta.entry((inner, sym)).or_default().push(inner);
+                    self.delta(inner, sym, inner);
                 }
             }
         }
@@ -258,59 +256,46 @@ impl NFABuilder {
 
     /// Add states to recognize whitespace: any nonempty sequence of ' ', '\t', '\f', '\n'.
     fn whitespace(&mut self) {
-        let first = self.new_state();
-        let second = self.new_state();
+        let start = self.new_state();
+        let end = self.new_state();
 
-        // Link to first.
-        self.nfa
-            .epsilon
-            .entry(self.nfa.init)
-            .or_default()
-            .push(first);
+        self.eps(start);
 
-        // Accept second.
         let label = AcceptedStateLabel::CommentOrWhitespace;
-        self.nfa.accepted.insert(second, label);
+        self.nfa.accepted.insert(end, label);
 
-        // Add transitions.
         for sym in constants::whitespace() {
-            // first -> second
-            self.nfa.delta.insert((first, sym), vec![second]);
+            // start -> end
+            self.delta(start, sym, end);
 
-            // second -> second
-            self.nfa.delta.insert((second, sym), vec![second]);
+            // end -> end
+            self.delta(end, sym, end);
         }
     }
 
     /// Add states to the NFA for recognizing identifiers. This should be called *after*
     /// `keywords()` and `literals()`, since ties are broken by which accepting state is smallest.
     fn identifiers(&mut self) {
-        let first = self.new_state();
-        let second = self.new_state();
+        let start = self.new_state();
+        let end = self.new_state();
 
-        // Link to first.
-        self.nfa
-            .epsilon
-            .entry(self.nfa.init)
-            .or_default()
-            .push(first);
+        self.eps(start);
 
-        // Accept second.
         let filler = "-*-java-identifier-*-";
         let label = AcceptedStateLabel::Token(TokenType::Identifier(filler));
-        self.nfa.accepted.insert(second, label);
+        self.nfa.accepted.insert(end, label);
 
         for sym in constants::letters() {
-            // first -> second
-            self.nfa.delta.insert((first, sym), vec![second]);
+            // start -> end
+            self.delta(start, sym, end);
 
-            // second -> second
-            self.nfa.delta.insert((second, sym), vec![second]);
+            // end -> end
+            self.delta(end, sym, end);
         }
 
         for sym in constants::digits() {
-            // second -> second
-            self.nfa.delta.insert((second, sym), vec![second]);
+            // end -> end
+            self.delta(end, sym, end);
         }
     }
 }
