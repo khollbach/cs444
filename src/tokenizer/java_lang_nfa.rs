@@ -1,10 +1,16 @@
 use crate::tokenizer::nfa::NFA;
+use crate::tokenizer::states::AcceptedStateLabel::CommentOrWhitespace;
+use crate::tokenizer::states::AcceptedStateLabel::Token as AcceptedToken;
 use crate::tokenizer::states::{AcceptedStateLabel, State};
-use crate::tokenizer::token_types::{Keyword, Operator, Separator};
-use crate::tokenizer::token_types::{Literal, TokenType};
+use crate::tokenizer::token_types::TokenType::{
+    Identifier as TTIdentifier, Keyword as TTKeyword, Literal as TTLiteral, Operator as TTOperator,
+    Separator as TTSeparator,
+};
+use crate::tokenizer::token_types::{Keyword, Literal, Operator, Separator, TokenType};
 use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
 use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
+use StarCommentType::{Javadoc, OneStar};
 
 mod constants;
 
@@ -13,23 +19,22 @@ mod constants;
 pub fn java_lang_nfa() -> NFA<State> {
     let mut builder = NFABuilder::new();
 
+    builder.comments();
+    builder.whitespace();
+
     for &k in &KEYWORDS {
         builder.keyword(k);
     }
-
     for &sep in &SEPARATORS {
         builder.separator(sep);
     }
-
     for &op in &OPERATORS {
         builder.operator(op);
     }
-
     builder.literals();
-    builder.whitespace();
-    builder.comments();
 
-    // This should appear last, to correctly break ties in favor of keywords, etc.
+    // This should appear after most things, to correctly break ties in favor of keywords, null
+    // literals, etc.
     builder.identifiers();
 
     builder.nfa
@@ -91,17 +96,17 @@ impl NFABuilder {
 
     /// Add a keyword to the NFA.
     fn keyword(&mut self, k: Keyword) {
-        self.exact_match(&k.to_string(), TokenType::Keyword(k));
+        self.exact_match(&k.to_string(), TTKeyword(k));
     }
 
     /// Add a separator to the NFA.
     fn separator(&mut self, sep: Separator) {
-        self.exact_match(&sep.to_string(), TokenType::Separator(sep));
+        self.exact_match(&sep.to_string(), TTSeparator(sep));
     }
 
     /// Add an operator to the NFA.
     fn operator(&mut self, op: Operator) {
-        self.exact_match(&op.to_string(), TokenType::Operator(op));
+        self.exact_match(&op.to_string(), TTOperator(op));
     }
 
     /// Add states and transitions to the NFA for recognizing a specific sequence of symbols.
@@ -122,7 +127,7 @@ impl NFABuilder {
             prev = curr;
         }
 
-        let label = AcceptedStateLabel::Token(token_type);
+        let label = AcceptedToken(token_type);
         self.nfa.accepted.insert(prev, label);
     }
 
@@ -148,7 +153,7 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(0)));
+        let label = AcceptedToken(TTLiteral(Literal::Int(0)));
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -165,7 +170,7 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = 55555;
-        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Int(filler)));
+        let label = AcceptedToken(TTLiteral(Literal::Int(filler)));
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -184,21 +189,21 @@ impl NFABuilder {
     /// Boolean literals `true` and `false`. The accepted states are labelled with the
     /// corresponding boolean values.
     fn bools(&mut self) {
-        self.exact_match("false", TokenType::Literal(Literal::Bool(false)));
-        self.exact_match("true", TokenType::Literal(Literal::Bool(true)));
+        self.exact_match("false", TTLiteral(Literal::Bool(false)));
+        self.exact_match("true", TTLiteral(Literal::Bool(true)));
     }
 
     /// Recognize string literals.
     fn strings(&mut self) {
         let filler = "-*-java-string-literal-*-";
-        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::String(filler)));
+        let label = AcceptedToken(TTLiteral(Literal::String(filler)));
         self.strings_or_chars('"', label);
     }
 
     /// Recognize character literals.
     fn chars(&mut self) {
         let filler = '?';
-        let label = AcceptedStateLabel::Token(TokenType::Literal(Literal::Char(filler)));
+        let label = AcceptedToken(TTLiteral(Literal::Char(filler)));
         self.strings_or_chars('\'', label);
     }
 
@@ -247,30 +252,7 @@ impl NFABuilder {
 
     /// `null` literal. Basically a keyword as far as the tokenizer is concerned.
     fn null(&mut self) {
-        self.exact_match("null", TokenType::Literal(Literal::Null));
-    }
-
-    fn comments(&mut self) {
-        //todo!()
-    }
-
-    /// Add states to recognize whitespace: any nonempty sequence of ' ', '\t', '\f', '\n'.
-    fn whitespace(&mut self) {
-        let start = self.new_state();
-        let end = self.new_state();
-
-        self.eps(start);
-
-        let label = AcceptedStateLabel::CommentOrWhitespace;
-        self.nfa.accepted.insert(end, label);
-
-        for sym in constants::whitespace() {
-            // start -> end
-            self.delta(start, sym, end);
-
-            // end -> end
-            self.delta(end, sym, end);
-        }
+        self.exact_match("null", TTLiteral(Literal::Null));
     }
 
     /// Add states to the NFA for recognizing identifiers. This should be called *after*
@@ -282,7 +264,7 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = "-*-java-identifier-*-";
-        let label = AcceptedStateLabel::Token(TokenType::Identifier(filler));
+        let label = AcceptedToken(TTIdentifier(filler));
         self.nfa.accepted.insert(end, label);
 
         for sym in constants::letters() {
@@ -298,6 +280,129 @@ impl NFABuilder {
             self.delta(end, sym, end);
         }
     }
+
+    /// Add comments to the NFA.
+    fn comments(&mut self) {
+        self.line_comments();
+
+        // Javadoc comments should precede normal ones, to correctly break the tie.
+        self.star_comments(Javadoc);
+        self.star_comments(OneStar);
+    }
+
+    /// Add states to recognize line comments.
+    fn line_comments(&mut self) {
+        let start = self.new_state();
+        let one_slash = self.new_state();
+        let two_slash = self.new_state();
+        // red slash, blue slash
+        let end = self.new_state();
+
+        self.eps(start);
+
+        let label = CommentOrWhitespace;
+        self.nfa.accepted.insert(end, label);
+
+        // start -> one_slash
+        // one_slash -> two_slash
+        self.delta_char(start, '/', one_slash);
+        self.delta_char(one_slash, '/', two_slash);
+
+        // two_slash -> two_slash
+        for sym in constants::all_symbols() {
+            if sym.to_char() != '\n' {
+                self.delta(two_slash, sym, two_slash);
+            }
+        }
+
+        // two_slash -> end
+        self.delta_char(two_slash, '\n', end);
+    }
+
+    /// Add states to recognize star comments (normal or javadoc).
+    fn star_comments(&mut self, type_: StarCommentType) {
+        let start = self.new_state();
+        let slash = self.new_state();
+        let inner = self.new_state();
+        let inner_star = self.new_state();
+        let end = self.new_state();
+
+        self.eps(start);
+
+        let label = match type_ {
+            OneStar => CommentOrWhitespace,
+            // For now, we're just silent discarding doc comments; same as regular comments.
+            // Maybe at some point we'll want to do something different with these...
+            Javadoc => CommentOrWhitespace,
+        };
+        self.nfa.accepted.insert(end, label);
+
+        // start -> slash
+        self.delta_char(start, '/', slash);
+
+        // slash -> inner
+        match type_ {
+            OneStar => {
+                self.delta_char(slash, '*', inner);
+            }
+            Javadoc => {
+                // Add one extra star before 'inner'.
+                let first_star = self.new_state();
+                self.delta_char(slash, '*', first_star);
+                self.delta_char(first_star, '*', inner);
+            }
+        }
+
+        // inner -> inner
+        for sym in constants::all_symbols() {
+            if sym.to_char() != '*' {
+                self.delta(inner, sym, inner);
+            }
+        }
+
+        // inner -> inner_star
+        self.delta_char(inner, '*', inner_star);
+
+        // inner_star -> inner_star
+        self.delta_char(inner_star, '*', inner_star);
+
+        // inner_star -> inner
+        for sym in constants::all_symbols() {
+            match sym.to_char() {
+                '*' | '/' => (),
+                _ => {
+                    self.delta(inner_star, sym, inner);
+                }
+            }
+        }
+
+        // inner_star -> end
+        self.delta_char(inner_star, '/', end);
+    }
+
+    /// Add states to recognize whitespace: any nonempty sequence of ' ', '\t', '\f', '\n'.
+    fn whitespace(&mut self) {
+        let start = self.new_state();
+        let end = self.new_state();
+
+        self.eps(start);
+
+        let label = CommentOrWhitespace;
+        self.nfa.accepted.insert(end, label);
+
+        for sym in constants::whitespace() {
+            // start -> end
+            self.delta(start, sym, end);
+
+            // end -> end
+            self.delta(end, sym, end);
+        }
+    }
+}
+
+enum StarCommentType {
+    OneStar,
+    Javadoc,
 }
 
 #[cfg(test)]
