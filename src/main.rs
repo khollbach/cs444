@@ -1,8 +1,6 @@
+use cs444::tokenizer::Tokenizer;
 use std::error::Error;
 use std::io::{self, prelude::*};
-use tokenizer::Tokenizer;
-
-mod tokenizer;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 

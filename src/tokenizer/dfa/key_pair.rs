@@ -1,17 +1,19 @@
 //! This allows us to lookup values in a HashMap whose keys are (A, B), even if we only have a hold
 //! of (&A, &B). For details on how this works, see here:
 //! https://stackoverflow.com/questions/45786717/how-to-implement-hashmap-with-two-keys
-//!
-//! Example use:
-//! ```
-//! use std::collections::HashMap;
-//!
-//! let mut map = HashMap::new();
-//! map.insert((123, 456), 777);
-//!
-//! let key = (&123, &456);
-//! assert_eq!(map.get(&key as &dyn KeyPair<_, _>), Some(&777));
-//! ```
+
+/// Example use:
+#[cfg(test)]
+#[test]
+fn example() {
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+    map.insert((123, 456), 777);
+
+    let key = (&123, &456);
+    assert_eq!(map.get(&key as &dyn KeyPair<_, _>), Some(&777));
+}
 
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};

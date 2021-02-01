@@ -428,11 +428,11 @@ mod tests {
         for (input, expected_output) in vec![
             (
                 vec!["\"asdf\\\"asdf\""],
-                vec![Literal(StringLit(String::from("asdf\\\"asdf")))],
+                vec![Literal(StringLit(String::from("asdf\"asdf")))],
             ),
             (
                 vec!["  \"abcabc\\\\abc\"  "],
-                vec![Literal(StringLit(String::from("abcabc\\\\abc")))],
+                vec![Literal(StringLit(String::from("abcabc\\abc")))],
             ),
         ] {
             TestCase {

@@ -9,6 +9,7 @@ use std::hash::Hash;
 use std::iter;
 
 mod key_pair;
+mod string_escapes;
 
 #[derive(Debug)]
 pub struct DFA<S> {
@@ -77,7 +78,7 @@ impl<S: Eq + Hash> DFA<S> {
         let mut state = &self.init;
 
         while let Some(pos) = positions.next() {
-            let key = (state, &pos.symbol());
+            let key = (state, &pos.symbol()); // todo handle encoding errors (somewhere)
             state = match self.delta.get(&key as &dyn KeyPair<_, _>) {
                 Some(next) => next,
                 // Implicit "dead" state, stop scanning.
@@ -88,7 +89,7 @@ impl<S: Eq + Hash> DFA<S> {
                 // Keep track of the longest match, and the positions after it.
                 longest_match = Some(match label {
                     AcceptedStateLabel::Token(type_) => {
-                        LongestMatch::Token(Self::make_token(type_, start, pos))
+                        LongestMatch::Token(make_token(type_, start, pos))
                     }
                     AcceptedStateLabel::CommentOrWhitespace => LongestMatch::CommentOrWhitespace,
                 });
@@ -101,70 +102,65 @@ impl<S: Eq + Hash> DFA<S> {
 
         longest_match
     }
-
-    /// Create a Token from a token type.
-    ///
-    /// Note that `start` and `end` are both inclusive!!!
-    fn make_token<'a>(
-        type_: &TokenType<'static>,
-        start: Position<'a>,
-        end: Position<'a>,
-    ) -> Token<'a> {
-        // Note the inclusive range.
-        let lexeme = &start.line[start.col..=end.col];
-
-        // Fill in the guts of the token, if applicable.
-        let type_ = match type_ {
-            Identifier(_) => Identifier(lexeme),
-            Literal(lit) => Literal(match lit {
-                Int(_) => {
-                    // Note that in Joos 1W, all int literals are `int` type, since there is no
-                    // `unsigned` in Java, and no `long` in Joos 1W.
-                    let n: Result<u32, _> = lexeme.parse();
-
-                    // todo handle errors gracefully
-                    let n = n.expect("Can't parse int; probably too big.");
-                    assert!(n <= 2u32.pow(31));
-
-                    Int(n)
-                }
-                Char(_) => {
-                    // Strip quotes.
-                    let bytes = lexeme.as_bytes();
-                    debug_assert_eq!(bytes[0], b'\'');
-                    debug_assert_eq!(bytes[bytes.len() - 1], b'\'');
-                    let b = &bytes[1..bytes.len() - 1];
-
-                    // todo: handle escape seq'ces, and check length (which can be != 1 btw)
-                    // (and handle these errors gracefully)
-                    assert_eq!(b.len(), 1);
-                    Char(b[0] as char)
-                }
-                StringLit(_) => {
-                    // Strip quotes.
-                    debug_assert_eq!(&lexeme[..1], "\"");
-                    debug_assert_eq!(&lexeme[lexeme.len() - 1..], "\"");
-                    let unescaped = &lexeme[1..lexeme.len() - 1];
-
-                    // todo: handle escape seq'ces.
-                    StringLit(String::from(unescaped))
-                }
-                l => l.clone(),
-            }),
-            t => t.clone(),
-        };
-
-        Token {
-            type_,
-            start,
-            lexeme,
-        }
-    }
 }
 
 enum LongestMatch<'a> {
     Token(Token<'a>),
     CommentOrWhitespace,
+}
+
+/// Create a Token from a token type.
+///
+/// Note that `start` and `end` are both inclusive!!!
+fn make_token<'a>(type_: &TokenType<'static>, start: Position<'a>, end: Position<'a>) -> Token<'a> {
+    // Note the inclusive range.
+    let lexeme = &start.line[start.col..=end.col];
+
+    // Fill in the guts of the token, if applicable.
+    let type_ = match type_ {
+        Identifier(_) => Identifier(lexeme),
+        Literal(lit) => Literal(match lit {
+            Int(_) => {
+                // Note that in Joos 1W, all int literals are `int` type, since there is no
+                // `unsigned` in Java, and no `long` in Joos 1W.
+                let n: Result<u32, _> = lexeme.parse();
+
+                // todo handle errors gracefully
+                let n = n.expect("Can't parse int; probably too big.");
+                assert!(n <= 2u32.pow(31));
+
+                Int(n)
+            }
+            Char(_) => {
+                // Strip quotes.
+                let bytes = lexeme.as_bytes();
+                debug_assert_eq!(bytes[0], b'\'');
+                debug_assert_eq!(bytes[bytes.len() - 1], b'\'');
+                let b = &bytes[1..bytes.len() - 1];
+
+                // todo: handle escape seq'ces, and check length (which can be != 1 btw)
+                // (and handle these errors gracefully)
+                assert_eq!(b.len(), 1);
+                Char(b[0] as char)
+            }
+            StringLit(_) => {
+                // Strip quotes.
+                debug_assert_eq!(&lexeme[..1], "\"");
+                debug_assert_eq!(&lexeme[lexeme.len() - 1..], "\"");
+                let unescaped = &lexeme[1..lexeme.len() - 1];
+
+                StringLit(string_escapes::resolve_escape_seqs(unescaped))
+            }
+            l => l.clone(),
+        }),
+        t => t.clone(),
+    };
+
+    Token {
+        type_,
+        start,
+        lexeme,
+    }
 }
 
 #[cfg(test)]
