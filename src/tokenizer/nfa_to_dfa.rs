@@ -86,8 +86,8 @@ impl<'a, S: Copy + Ord + Hash> NfaConverter<'a, S> {
     fn is_accepted(&self, ss: &StateSet<S>) -> Option<AcceptedStateLabel> {
         // Since `StateSet`s are sorted, we'll find the smallest accepted state.
         for s in ss.states() {
-            if let Some(&label) = self.nfa.accepted.get(s) {
-                return Some(label);
+            if let Some(label) = self.nfa.accepted.get(s) {
+                return Some(label.clone());
             }
         }
         None

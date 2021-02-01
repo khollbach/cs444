@@ -11,7 +11,7 @@ mod states;
 mod token_types;
 
 /// A token in the output stream of the tokenizer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'a> {
     pub type_: TokenType<'a>,
     pub start: Position<'a>,

@@ -1,6 +1,7 @@
 use crate::tokenizer::states::AcceptedStateLabel;
-use crate::tokenizer::token_types::Literal::StringLit;
-use crate::tokenizer::token_types::{Literal, TokenType};
+use crate::tokenizer::token_types::Literal::{Char, Int, StringLit};
+use crate::tokenizer::token_types::TokenType;
+use crate::tokenizer::token_types::TokenType::{Identifier, Literal};
 use crate::tokenizer::{Position, Symbol, Token};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
@@ -83,7 +84,7 @@ impl<S: Eq + Hash> DFA<S> {
                 None => break,
             };
 
-            if let Some(&label) = self.accepted.get(state) {
+            if let Some(label) = self.accepted.get(state) {
                 // Keep track of the longest match, and the positions after it.
                 longest_match = Some(match label {
                     AcceptedStateLabel::Token(type_) => {
@@ -103,9 +104,9 @@ impl<S: Eq + Hash> DFA<S> {
 
     /// Create a Token from a token type.
     ///
-    /// Note that start and end are both inclusive!!!
+    /// Note that `start` and `end` are both inclusive!!!
     fn make_token<'a>(
-        type_: TokenType<'static>,
+        type_: &TokenType<'static>,
         start: Position<'a>,
         end: Position<'a>,
     ) -> Token<'a> {
@@ -114,9 +115,9 @@ impl<S: Eq + Hash> DFA<S> {
 
         // Fill in the guts of the token, if applicable.
         let type_ = match type_ {
-            TokenType::Identifier(_) => TokenType::Identifier(lexeme),
-            TokenType::Literal(lit) => TokenType::Literal(match lit {
-                Literal::Int(_) => {
+            Identifier(_) => Identifier(lexeme),
+            Literal(lit) => Literal(match lit {
+                Int(_) => {
                     // Note that in Joos 1W, all int literals are `int` type, since there is no
                     // `unsigned` in Java, and no `long` in Joos 1W.
                     let n: Result<u32, _> = lexeme.parse();
@@ -125,9 +126,9 @@ impl<S: Eq + Hash> DFA<S> {
                     let n = n.expect("Can't parse int; probably too big.");
                     assert!(n <= 2u32.pow(31));
 
-                    Literal::Int(n)
+                    Int(n)
                 }
-                Literal::Char(_) => {
+                Char(_) => {
                     // Strip quotes.
                     let bytes = lexeme.as_bytes();
                     debug_assert_eq!(bytes[0], b'\'');
@@ -137,19 +138,20 @@ impl<S: Eq + Hash> DFA<S> {
                     // todo: handle escape seq'ces, and check length (which can be != 1 btw)
                     // (and handle these errors gracefully)
                     assert_eq!(b.len(), 1);
-                    Literal::Char(b[0] as char)
+                    Char(b[0] as char)
                 }
                 StringLit(_) => {
                     // Strip quotes.
                     debug_assert_eq!(&lexeme[..1], "\"");
                     debug_assert_eq!(&lexeme[lexeme.len() - 1..], "\"");
-                    let s = &lexeme[1..lexeme.len() - 1];
+                    let unescaped = &lexeme[1..lexeme.len() - 1];
 
-                    StringLit(s) // todo: handle escape seq'ces.
+                    // todo: handle escape seq'ces.
+                    StringLit(String::from(unescaped))
                 }
-                l => l,
+                l => l.clone(),
             }),
-            t => t,
+            t => t.clone(),
         };
 
         Token {

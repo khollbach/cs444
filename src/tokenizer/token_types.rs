@@ -1,11 +1,11 @@
 use std::fmt;
 
 /// Diffent types of tokens in the language.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType<'a> {
     Identifier(&'a str),
     Keyword(Keyword),
-    Literal(Literal<'a>),
+    Literal(Literal),
     Separator(Separator),
     Operator(Operator),
 }
@@ -62,16 +62,16 @@ pub enum Keyword {
     While,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Literal<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Literal {
     /// Anywhere in 0..=2^31, but 2^31 should fail to parse unless it is preceeded by a unary
     /// negation operator.
     Int(u32),
     Bool(bool),
-    /// Escape characters (if any) have been resolved.
+    /// (If this was an escaped character, it has been resolved.)
     Char(char),
-    /// Escape characters (if any) have been resolved.
-    StringLit(&'a str),
+    /// Escape characters have been resolved.
+    StringLit(String),
     Null,
 }
 

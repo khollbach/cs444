@@ -194,7 +194,7 @@ impl NFABuilder {
 
     /// Recognize string literals.
     fn strings(&mut self) {
-        let filler = "-*-java-string-literal-*-";
+        let filler = String::from("-*-java-string-literal-*-");
         let label = AcceptedToken(Literal(StringLit(filler)));
         self.strings_or_chars('"', label);
     }
@@ -415,25 +415,24 @@ mod tests {
     fn simple_string_lit() {
         TestCase {
             input: vec!["\"asdf\""],
-            expected_output: vec![Literal(StringLit("asdf"))],
+            expected_output: vec![Literal(StringLit(String::from("asdf")))],
         }
         .run(&Tokenizer::new())
     }
 
     #[test]
     fn string_lit_escape_quote() {
-        // todo: update the values in the `expected` tokens once we actually implement string
-        // escapes.
+        // todo fix these after impl'ing esc seq's
 
         let tokenizer = Tokenizer::new();
         for (input, expected_output) in vec![
             (
                 vec!["\"asdf\\\"asdf\""],
-                vec![Literal(StringLit("asdf\\\"asdf"))],
+                vec![Literal(StringLit(String::from("asdf\\\"asdf")))],
             ),
             (
                 vec!["  \"abcabc\\\\abc\"  "],
-                vec![Literal(StringLit("abcabc\\\\abc"))],
+                vec![Literal(StringLit(String::from("abcabc\\\\abc")))],
             ),
         ] {
             TestCase {

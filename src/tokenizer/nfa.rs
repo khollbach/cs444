@@ -62,7 +62,7 @@ mod tests {
 
         NFABuilder {
             init: "init",
-            accepted: vec![("a1", if_), ("aba", if_)],
+            accepted: vec![("a1", if_.clone()), ("aba", if_)],
             delta: vec![
                 (("init", 'a'), vec!["a1", "a2"]),
                 (("a2", 'b'), vec!["ab"]),
