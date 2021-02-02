@@ -32,13 +32,13 @@ fn main() -> Res<()> {
         } else {
             // Download the example; read it into memory.
             let name = to_filename(&line);
-            let url = String::from(FEATURES_URL) + "/" + &remove_dashes(&name) + ".html";
+            let url = format!("{}/{}.html", FEATURES_URL, remove_dashes(&name));
             let res = rq::get(&url)?;
             assert!(res.status().is_success(), url);
             let lines: Vec<_> = BufReader::new(res).lines().collect::<Result<_, _>>()?;
 
             // Write it to a file, stripping out certain HTML tags.
-            let filename = String::from(dir.as_ref().unwrap()) + "/" + &name + ".java";
+            let filename = format!("{}/{}.java", dir.as_ref().unwrap(), name);
             let mut file = File::create(&filename)?;
             for line in strip_tags(lines.iter().map(|s| s.as_str())) {
                 writeln!(file, "{}", line)?;

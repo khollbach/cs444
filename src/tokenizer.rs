@@ -1,7 +1,6 @@
 use dfa::DFA;
 use states::{State, StateSet};
 use std::fmt;
-use token_types::TokenType;
 
 mod dfa;
 mod java_lang_nfa;
@@ -9,6 +8,8 @@ mod nfa;
 mod nfa_to_dfa;
 mod states;
 mod token_types;
+
+pub use token_types::TokenType;
 
 /// A token in the output stream of the tokenizer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,7 +21,7 @@ pub struct Token<'a> {
 
 impl<'a> Token<'a> {
     /// Zero-indexed, exclusive.
-    pub fn end_col(self) -> usize {
+    pub fn end_col(&self) -> usize {
         // Relies on the token being ASCII-only.
         self.start.col + self.lexeme.len()
     }
@@ -53,10 +54,10 @@ impl Tokenizer {
 /// A position in the input stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position<'a> {
-    line_num: usize,
-    line: &'a str,
+    pub line: &'a str,
+    pub line_num: usize,
     /// Invariant: 0 <= col <= line.len()
-    col: usize,
+    pub col: usize,
 }
 
 impl<'a> Position<'a> {
