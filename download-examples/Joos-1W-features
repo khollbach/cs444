@@ -1,0 +1,80 @@
+# Class structure
+extends
+implements
+static method declaration
+class import
+package import
+package
+interfaces
+static field declaration
+
+# Method and field access
+external call
+implicit this for fields
+implicit this for methods
+access static field
+call static methods
+non-this field access
+method overloading
+array length
+
+# Modifiers
+public classes
+protected fields
+public constructors
+public methods
+public fields
+protected methods
+abstract
+final classes
+final methods
+protected constructors
+native int
+
+# Constructors
+implicit super call
+field initializers
+constructor overloading
+
+# Method structure
+nested blocks
+arbitrary return
+omitted void return
+arbitrary local declaration
+
+# Control flow
+if
+while
+for
+
+# Types
+boolean
+int
+char
+byte
+short
+array
+array_return
+
+# Literals and names
+int literals
+boolean literals
+string literals
+null literal
+this
+char literals
+character escapes
+compound names
+comment
+javadoc
+
+# Operations
+arithmetic operations
+comparison operations
+eager boolean operations
+implicit string concatenation
+lazy boolean operations
+instanceof
+primitive casts
+reference casts
+widening
