@@ -1,7 +1,6 @@
 use crate::tokenizer::states::AcceptedStateLabel;
-use crate::tokenizer::token_types::Literal::{Char, Int, StringLit};
-use crate::tokenizer::token_types::TokenType;
-use crate::tokenizer::token_types::TokenType::{Identifier, Literal};
+use crate::tokenizer::token_types::Literal::{self, Char, Int, StringLit};
+use crate::tokenizer::token_types::TokenType as TT;
 use crate::tokenizer::{Position, Symbol, Token};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
@@ -112,14 +111,14 @@ enum LongestMatch<'a> {
 /// Create a Token from a token type.
 ///
 /// Note that `start` and `end` are both inclusive!!!
-fn make_token<'a>(type_: &TokenType<'static>, start: Position<'a>, end: Position<'a>) -> Token<'a> {
+fn make_token<'a>(type_: &TT<'static>, start: Position<'a>, end: Position<'a>) -> Token<'a> {
     // Note the inclusive range.
     let lexeme = &start.line[start.col..=end.col];
 
     // Fill in the guts of the token, if applicable.
     let type_ = match type_ {
-        Identifier(_) => Identifier(lexeme),
-        Literal(lit) => Literal(match lit {
+        TT::Identifier(_) => TT::Identifier(lexeme),
+        TT::Literal(lit) => TT::Literal(match lit {
             Int(_) => {
                 // Note that in Joos 1W, all int literals are `int` type, since there is no
                 // `unsigned` in Java, and no `long` in Joos 1W.
@@ -131,18 +130,7 @@ fn make_token<'a>(type_: &TokenType<'static>, start: Position<'a>, end: Position
 
                 Int(n)
             }
-            Char(_) => {
-                // Strip quotes.
-                let bytes = lexeme.as_bytes();
-                debug_assert_eq!(bytes[0], b'\'');
-                debug_assert_eq!(bytes[bytes.len() - 1], b'\'');
-                let b = &bytes[1..bytes.len() - 1];
-
-                // todo: handle escape seq'ces, and check length (which can be != 1 btw)
-                // (and handle these errors gracefully)
-                assert_eq!(b.len(), 1);
-                Char(b[0] as char)
-            }
+            Char(_) => make_char_literal(lexeme),
             StringLit(_) => {
                 // Strip quotes.
                 debug_assert_eq!(&lexeme[..1], "\"");
@@ -161,6 +149,34 @@ fn make_token<'a>(type_: &TokenType<'static>, start: Position<'a>, end: Position
         start,
         lexeme,
     }
+}
+
+fn make_char_literal(lexeme: &str) -> Literal {
+    // Strip quotes.
+    debug_assert_eq!(&lexeme[..1], "'");
+    debug_assert_eq!(&lexeme[lexeme.len() - 1..], "'");
+    let unescaped = &lexeme[1..lexeme.len() - 1];
+
+    // We could make the error messages better here by making `string_escapes` resolution lazy.
+    // That way as soon as there's more than one char we just stop, instead of trying to resolve
+    // escapes later in the line (whose errors would probably just confuse the user).
+    let s = string_escapes::resolve_escape_seqs(unescaped);
+    let mut chars = s.chars();
+    let ch = match chars.next() {
+        None => panic!("Empty char literal; must have a char between the quotes"),
+        Some(ch) => ch,
+    };
+    match chars.next() {
+        None => (),
+        Some(extra) => {
+            panic!(
+                "Char literal too long. Expected closing quote `'` but found `{}`",
+                extra
+            )
+        }
+    };
+
+    Char(ch)
 }
 
 #[cfg(test)]

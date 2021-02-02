@@ -90,7 +90,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn smoke_test() {
+    fn example() {
         let s = resolve_escape_seqs(r"asdf\\asdf\'");
         assert_eq!(s, r"asdf\asdf'");
     }
