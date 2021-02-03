@@ -9,17 +9,18 @@ mod nfa_to_dfa;
 mod states;
 mod tokens;
 
-pub use tokens::TokenValue;
+pub use tokens::Token;
 
-/// A token in the output stream of the tokenizer.
+/// A token in the output stream of the tokenizer, together with some metadata about where it is in
+/// the input stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Token<'a> {
-    pub val: TokenValue<'a>,
+pub struct TokenInfo<'a, T: 'a> {
+    pub val: T,
     pub start: Position<'a>,
     pub lexeme: &'a str,
 }
 
-impl<'a> Token<'a> {
+impl<'a, T> TokenInfo<'a, T> {
     /// Zero-indexed, exclusive.
     pub fn end_col(&self) -> usize {
         // Relies on the token being ASCII-only.
@@ -34,7 +35,10 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
-    /// Compile an NFA for Java's lexical grammar into a DFA.
+    /// Compile an NFA for the lexical grammar of Joos 1W into a DFA.
+    ///
+    /// Be warned that this is an expensive operation. Best to avoid calling this in a loop in test
+    /// cases, etc.
     pub fn new() -> Self {
         let nfa = joos_1w_nfa::nfa();
         let dfa = nfa.to_dfa();
@@ -46,7 +50,7 @@ impl Tokenizer {
     pub fn tokenize<'a>(
         &'a self,
         lines: impl Iterator<Item = &'a str> + Clone + 'a,
-    ) -> impl Iterator<Item = Token> + 'a {
+    ) -> impl Iterator<Item = TokenInfo<Token>> + 'a {
         self.dfa.tokenize(all_positions(lines))
     }
 }
@@ -54,7 +58,9 @@ impl Tokenizer {
 /// A position in the input stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position<'a> {
+    /// Does not contain a newline character.
     pub line: &'a str,
+    /// Zero-indexed.
     pub line_num: usize,
     /// Invariant: 0 <= col <= line.len()
     pub col: usize,
@@ -138,15 +144,15 @@ mod tests {
     use tokens::Keyword::{Else, If, While};
     use tokens::Operator::{Assign, Le};
     use tokens::Separator::{Comma, Dot, LBrace, RBrace};
-    use tokens::TokenValue::{Keyword, Operator, Separator};
+    use tokens::Token::{Keyword, Operator, Separator};
 
-    /// A test case for the tokenizer. Only the token types are validated.
-    pub struct TestCase {
-        pub input: Vec<&'static str>,
-        pub expected_output: Vec<TokenValue<'static>>,
+    /// A test case for the tokenizer. Only the tokens' inner values are checked.
+    pub struct TestCase<'a> {
+        pub input: Vec<&'a str>,
+        pub expected_output: Vec<Token<'a>>,
     }
 
-    impl TestCase {
+    impl<'a> TestCase<'a> {
         /// Panics if the input doesn't tokenize as expected.
         pub fn run(self, tokenizer: &Tokenizer) {
             let mut actual = vec![];
@@ -157,16 +163,15 @@ mod tests {
         }
     }
 
-    /// A test case for the tokenizer.
+    /// A test case for the tokenizer. The entire `TokenInfo` for each token is checked.
     ///
-    /// Every detail of every token is validated. This is a better test, but also more tedious to
-    /// specify.
-    struct DetailedTestCase {
-        input: Vec<&'static str>,
-        expected_output: Vec<Token<'static>>,
+    /// This is more detailed than `TestCase`, but also more tedious to specify.
+    struct DetailedTestCase<'a> {
+        input: Vec<&'a str>,
+        expected_output: Vec<TokenInfo<'a, Token<'a>>>,
     }
 
-    impl DetailedTestCase {
+    impl<'a> DetailedTestCase<'a> {
         /// Panics if the input doesn't tokenize as expected.
         fn run(self, tokenizer: &Tokenizer) {
             let actual: Vec<_> = tokenizer.tokenize(self.input.into_iter()).collect();
@@ -215,7 +220,7 @@ mod tests {
 
         let input = vec!["if while else", "", "{}"];
 
-        let if_ = Token {
+        let if_ = TokenInfo {
             val: Keyword(If),
             start: Position {
                 line: input[0],
@@ -225,7 +230,7 @@ mod tests {
             lexeme: "if",
         };
 
-        let while_ = Token {
+        let while_ = TokenInfo {
             val: Keyword(While),
             start: Position {
                 line: input[0],
@@ -235,7 +240,7 @@ mod tests {
             lexeme: "while",
         };
 
-        let else_ = Token {
+        let else_ = TokenInfo {
             val: Keyword(Else),
             start: Position {
                 line: input[0],
@@ -245,7 +250,7 @@ mod tests {
             lexeme: "else",
         };
 
-        let left = Token {
+        let left = TokenInfo {
             val: Separator(LBrace),
             start: Position {
                 line: input[2],
@@ -255,7 +260,7 @@ mod tests {
             lexeme: "{",
         };
 
-        let right = Token {
+        let right = TokenInfo {
             val: Separator(RBrace),
             start: Position {
                 line: input[2],

@@ -3,9 +3,8 @@ use crate::tokenizer::states::AcceptedStateLabel::CommentOrWhitespace;
 use crate::tokenizer::states::AcceptedStateLabel::Token as AcceptedToken;
 use crate::tokenizer::states::{AcceptedStateLabel, State};
 use crate::tokenizer::tokens::Literal::{Bool, Char, Int, Null, StringLit};
-use crate::tokenizer::tokens::TokenValue as TV;
-use crate::tokenizer::tokens::TokenValue::{Identifier, Literal};
-use crate::tokenizer::tokens::{Keyword, Operator, Separator, TokenValue};
+use crate::tokenizer::tokens::Token::{Identifier, Literal};
+use crate::tokenizer::tokens::{Keyword, Operator, Separator, Token};
 use crate::tokenizer::tokens::{KEYWORDS, OPERATORS, SEPARATORS};
 use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
@@ -99,17 +98,17 @@ impl NFABuilder {
 
     /// Add a keyword to the NFA.
     fn keyword(&mut self, k: Keyword) {
-        self.exact_match(&k.to_string(), TV::Keyword(k));
+        self.exact_match(&k.to_string(), Token::Keyword(k));
     }
 
     /// Add a separator to the NFA.
     fn separator(&mut self, sep: Separator) {
-        self.exact_match(&sep.to_string(), TV::Separator(sep));
+        self.exact_match(&sep.to_string(), Token::Separator(sep));
     }
 
     /// Add an operator to the NFA.
     fn operator(&mut self, op: Operator) {
-        self.exact_match(&op.to_string(), TV::Operator(op));
+        self.exact_match(&op.to_string(), Token::Operator(op));
     }
 
     /// Add states and transitions to the NFA for recognizing a specific sequence of symbols.
@@ -117,7 +116,7 @@ impl NFABuilder {
     /// This can be used to add a keyword to the tokenizer, for example. `s` must be ascii.
     ///
     /// Basically, this just generates a linked list of states.
-    fn exact_match(&mut self, s: &str, token_type: TokenValue<'static>) {
+    fn exact_match(&mut self, s: &str, token_type: Token<'static>) {
         assert!(!s.is_empty());
 
         let start = self.new_state();
@@ -412,7 +411,7 @@ enum StarCommentType {
 mod tests {
     use crate::tokenizer::tests::TestCase;
     use crate::tokenizer::tokens::Literal::StringLit;
-    use crate::tokenizer::tokens::TokenValue::Literal;
+    use crate::tokenizer::tokens::Token::Literal;
     use crate::tokenizer::Tokenizer;
 
     #[test]

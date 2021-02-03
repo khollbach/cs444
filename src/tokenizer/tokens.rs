@@ -2,7 +2,7 @@ use std::fmt;
 
 /// Diffent types of tokens in the language.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenValue<'a> {
+pub enum Token<'a> {
     Identifier(&'a str),
     Keyword(Keyword),
     Literal(Literal),
