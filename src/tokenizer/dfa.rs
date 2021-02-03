@@ -1,6 +1,6 @@
 use crate::tokenizer::states::AcceptedStateLabel;
-use crate::tokenizer::token_types::Literal::{self, Char, Int, StringLit};
-use crate::tokenizer::token_types::TokenType as TT;
+use crate::tokenizer::tokens::Literal::{self, Char, Int, StringLit};
+use crate::tokenizer::tokens::TokenValue as TV;
 use crate::tokenizer::{Position, Symbol, Token};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
@@ -87,8 +87,8 @@ impl<S: Eq + Hash> DFA<S> {
             if let Some(label) = self.accepted.get(state) {
                 // Keep track of the longest match, and the positions after it.
                 longest_match = Some(match label {
-                    AcceptedStateLabel::Token(type_) => {
-                        LongestMatch::Token(make_token(type_, start, pos))
+                    AcceptedStateLabel::Token(val) => {
+                        LongestMatch::Token(make_token(val, start, pos))
                     }
                     AcceptedStateLabel::CommentOrWhitespace => LongestMatch::CommentOrWhitespace,
                 });
@@ -111,14 +111,14 @@ enum LongestMatch<'a> {
 /// Create a Token from a token type.
 ///
 /// Note that `start` and `end` are both inclusive!!!
-fn make_token<'a>(type_: &TT<'static>, start: Position<'a>, end: Position<'a>) -> Token<'a> {
+fn make_token<'a>(val: &TV<'static>, start: Position<'a>, end: Position<'a>) -> Token<'a> {
     // Note the inclusive range.
     let lexeme = &start.line[start.col..=end.col];
 
     // Fill in the guts of the token, if applicable.
-    let type_ = match type_ {
-        TT::Identifier(_) => TT::Identifier(lexeme),
-        TT::Literal(lit) => TT::Literal(match lit {
+    let val = match val {
+        TV::Identifier(_) => TV::Identifier(lexeme),
+        TV::Literal(lit) => TV::Literal(match lit {
             Int(_) => {
                 // Note that in Joos 1W, all int literals are `int` type, since there is no
                 // `unsigned` in Java, and no `long` in Joos 1W.
@@ -144,11 +144,7 @@ fn make_token<'a>(type_: &TT<'static>, start: Position<'a>, end: Position<'a>) -
         t => t.clone(),
     };
 
-    Token {
-        type_,
-        start,
-        lexeme,
-    }
+    Token { val, start, lexeme }
 }
 
 fn make_char_literal(lexeme: &str) -> Literal {
@@ -217,8 +213,8 @@ impl<S: Eq + Hash> DFA<S> {
 mod tests {
     use super::*;
     use crate::tokenizer;
-    use crate::tokenizer::token_types::Keyword::If;
-    use crate::tokenizer::token_types::TokenType::Keyword;
+    use crate::tokenizer::tokens::Keyword::If;
+    use crate::tokenizer::tokens::TokenValue::Keyword;
 
     /// Helper struct for specifying small DFAs in unit tests.
     struct DFABuilder<'a> {

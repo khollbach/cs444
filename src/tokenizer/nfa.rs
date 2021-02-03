@@ -25,8 +25,8 @@ impl<S: Copy + Ord + Hash> NFA<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tokenizer::token_types::Keyword::If;
-    use crate::tokenizer::token_types::TokenType::Keyword;
+    use crate::tokenizer::tokens::Keyword::If;
+    use crate::tokenizer::tokens::TokenValue::Keyword;
 
     /// Helper struct for specifying small NFAs in unit tests.
     struct NFABuilder<'a> {

@@ -7,14 +7,14 @@ mod java_lang_nfa;
 mod nfa;
 mod nfa_to_dfa;
 mod states;
-mod token_types;
+mod tokens;
 
-pub use token_types::TokenType;
+pub use tokens::TokenValue;
 
 /// A token in the output stream of the tokenizer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'a> {
-    pub type_: TokenType<'a>,
+    pub val: TokenValue<'a>,
     pub start: Position<'a>,
     pub lexeme: &'a str,
 }
@@ -135,15 +135,15 @@ impl fmt::Debug for Symbol {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use token_types::Keyword::{Else, If, While};
-    use token_types::Operator::{Assign, Le};
-    use token_types::Separator::{Comma, Dot, LBrace, RBrace};
-    use token_types::TokenType::{Keyword, Operator, Separator};
+    use tokens::Keyword::{Else, If, While};
+    use tokens::Operator::{Assign, Le};
+    use tokens::Separator::{Comma, Dot, LBrace, RBrace};
+    use tokens::TokenValue::{Keyword, Operator, Separator};
 
     /// A test case for the tokenizer. Only the token types are validated.
     pub struct TestCase {
         pub input: Vec<&'static str>,
-        pub expected_output: Vec<TokenType<'static>>,
+        pub expected_output: Vec<TokenValue<'static>>,
     }
 
     impl TestCase {
@@ -151,7 +151,7 @@ mod tests {
         pub fn run(self, tokenizer: &Tokenizer) {
             let mut actual = vec![];
             for token in tokenizer.tokenize(self.input.into_iter()) {
-                actual.push(token.type_);
+                actual.push(token.val);
             }
             assert_eq!(self.expected_output, actual);
         }
@@ -216,7 +216,7 @@ mod tests {
         let input = vec!["if while else", "", "{}"];
 
         let if_ = Token {
-            type_: Keyword(If),
+            val: Keyword(If),
             start: Position {
                 line: input[0],
                 line_num: 0,
@@ -226,7 +226,7 @@ mod tests {
         };
 
         let while_ = Token {
-            type_: Keyword(While),
+            val: Keyword(While),
             start: Position {
                 line: input[0],
                 line_num: 0,
@@ -236,7 +236,7 @@ mod tests {
         };
 
         let else_ = Token {
-            type_: Keyword(Else),
+            val: Keyword(Else),
             start: Position {
                 line: input[0],
                 line_num: 0,
@@ -246,7 +246,7 @@ mod tests {
         };
 
         let left = Token {
-            type_: Separator(LBrace),
+            val: Separator(LBrace),
             start: Position {
                 line: input[2],
                 line_num: 2,
@@ -256,7 +256,7 @@ mod tests {
         };
 
         let right = Token {
-            type_: Separator(RBrace),
+            val: Separator(RBrace),
             start: Position {
                 line: input[2],
                 line_num: 2,

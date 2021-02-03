@@ -2,11 +2,11 @@ use crate::tokenizer::nfa::NFA;
 use crate::tokenizer::states::AcceptedStateLabel::CommentOrWhitespace;
 use crate::tokenizer::states::AcceptedStateLabel::Token as AcceptedToken;
 use crate::tokenizer::states::{AcceptedStateLabel, State};
-use crate::tokenizer::token_types::Literal::{Bool, Char, Int, Null, StringLit};
-use crate::tokenizer::token_types::TokenType as TT;
-use crate::tokenizer::token_types::TokenType::{Identifier, Literal};
-use crate::tokenizer::token_types::{Keyword, Operator, Separator, TokenType};
-use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
+use crate::tokenizer::tokens::Literal::{Bool, Char, Int, Null, StringLit};
+use crate::tokenizer::tokens::TokenValue as TV;
+use crate::tokenizer::tokens::TokenValue::{Identifier, Literal};
+use crate::tokenizer::tokens::{Keyword, Operator, Separator, TokenValue};
+use crate::tokenizer::tokens::{KEYWORDS, OPERATORS, SEPARATORS};
 use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
 use StarCommentType::{Javadoc, OneStar};
@@ -95,17 +95,17 @@ impl NFABuilder {
 
     /// Add a keyword to the NFA.
     fn keyword(&mut self, k: Keyword) {
-        self.exact_match(&k.to_string(), TT::Keyword(k));
+        self.exact_match(&k.to_string(), TV::Keyword(k));
     }
 
     /// Add a separator to the NFA.
     fn separator(&mut self, sep: Separator) {
-        self.exact_match(&sep.to_string(), TT::Separator(sep));
+        self.exact_match(&sep.to_string(), TV::Separator(sep));
     }
 
     /// Add an operator to the NFA.
     fn operator(&mut self, op: Operator) {
-        self.exact_match(&op.to_string(), TT::Operator(op));
+        self.exact_match(&op.to_string(), TV::Operator(op));
     }
 
     /// Add states and transitions to the NFA for recognizing a specific sequence of symbols.
@@ -113,7 +113,7 @@ impl NFABuilder {
     /// This can be used to add a keyword to the tokenizer, for example. `s` must be ascii.
     ///
     /// Basically, this just generates a linked list of states.
-    fn exact_match(&mut self, s: &str, token_type: TokenType<'static>) {
+    fn exact_match(&mut self, s: &str, token_type: TokenValue<'static>) {
         assert!(!s.is_empty());
 
         let start = self.new_state();
@@ -319,7 +319,7 @@ impl NFABuilder {
     }
 
     /// Add states to recognize star comments (normal or javadoc).
-    fn star_comments(&mut self, type_: StarCommentType) {
+    fn star_comments(&mut self, val: StarCommentType) {
         let start = self.new_state();
         let slash = self.new_state();
         let inner = self.new_state();
@@ -328,7 +328,7 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = match type_ {
+        let label = match val {
             OneStar => CommentOrWhitespace,
             // For now, we're just silent discarding doc comments; same as regular comments.
             // Maybe at some point we'll want to do something different with these...
@@ -340,7 +340,7 @@ impl NFABuilder {
         self.delta_char(start, '/', slash);
 
         // slash -> inner
-        match type_ {
+        match val {
             OneStar => {
                 self.delta_char(slash, '*', inner);
             }
@@ -407,8 +407,8 @@ enum StarCommentType {
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::tests::TestCase;
-    use crate::tokenizer::token_types::Literal::StringLit;
-    use crate::tokenizer::token_types::TokenType::Literal;
+    use crate::tokenizer::tokens::Literal::StringLit;
+    use crate::tokenizer::tokens::TokenValue::Literal;
     use crate::tokenizer::Tokenizer;
 
     #[test]

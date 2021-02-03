@@ -1,16 +1,16 @@
-use crate::tokenizer::token_types::TokenType;
+use crate::tokenizer::tokens::TokenValue;
 use std::fmt;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
 /// Used in NFAs and DFAs to label each accepted state with the token type it accepts.
 ///
-/// Beware that the inner data of the `TokenType` is likely just filler. E.g., it will never
+/// Beware that the inner data of the `TokenValue` is likely just filler. E.g., it will never
 /// contain an actual string literal from the input stream. So you'll have to fill it in during
 /// tokenizing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AcceptedStateLabel {
-    Token(TokenType<'static>),
+    Token(TokenValue<'static>),
     CommentOrWhitespace,
 }
 
