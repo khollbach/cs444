@@ -3,7 +3,7 @@ use states::{State, StateSet};
 use std::fmt;
 
 mod dfa;
-mod java_lang_nfa;
+mod joos_1w_nfa;
 mod nfa;
 mod nfa_to_dfa;
 mod states;
@@ -36,7 +36,7 @@ pub struct Tokenizer {
 impl Tokenizer {
     /// Compile an NFA for Java's lexical grammar into a DFA.
     pub fn new() -> Self {
-        let nfa = java_lang_nfa::java_lang_nfa();
+        let nfa = joos_1w_nfa::nfa();
         let dfa = nfa.to_dfa();
 
         Self { dfa }

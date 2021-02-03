@@ -15,7 +15,11 @@ mod constants;
 
 /// Generate an NFA that recognizes the lexical grammar of Java (actually Joos 1W, there are some
 /// differences; e.g. no floating point.).
-pub fn java_lang_nfa() -> NFA<State> {
+///
+/// We'll end up successfully tokenizing some operators that technically aren't in Joos 1W, e.g.
+/// right-shift-assign (">>="), etc. We'll catch these later during parsing though, so that's fine
+/// with me.
+pub fn nfa() -> NFA<State> {
     let mut builder = NFABuilder::new();
 
     builder.comments();
