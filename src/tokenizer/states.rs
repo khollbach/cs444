@@ -3,6 +3,32 @@ use std::fmt;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
+/// A symbol in the input stream.
+///
+/// Used to label state transitions in DFAs and NFAs.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Symbol {
+    ascii_byte: u8,
+}
+
+impl Symbol {
+    pub fn new(ascii_byte: u8) -> Self {
+        assert!(ascii_byte < 128);
+        Self { ascii_byte }
+    }
+
+    pub fn to_char(self) -> char {
+        self.ascii_byte as char
+    }
+}
+
+impl fmt::Debug for Symbol {
+    /// We could just derive, but this avoids newlines in {:#?} output.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Symbol({:?})", self.to_char())
+    }
+}
+
 /// Used in NFAs and DFAs to label each accepted state with the token type it accepts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AcceptedStateLabel {

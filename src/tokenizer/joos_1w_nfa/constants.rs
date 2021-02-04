@@ -1,4 +1,4 @@
-use crate::tokenizer::Symbol;
+use crate::tokenizer::states::Symbol;
 
 pub fn whitespace() -> impl Iterator<Item = Symbol> {
     WHITE_SPACE.iter().map(|&c| Symbol::new(c as u8))

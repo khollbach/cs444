@@ -1,7 +1,7 @@
-use crate::tokenizer::states::AcceptedStateLabel;
+use crate::tokenizer::states::{AcceptedStateLabel, Symbol};
 use crate::tokenizer::tokens::Literal::{self, Char, Int, StringLit};
 use crate::tokenizer::tokens::Token;
-use crate::tokenizer::{Position, Symbol, TokenInfo, TokenOrComment};
+use crate::tokenizer::{Position, TokenInfo, TokenOrComment};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
 use std::fmt::Debug;

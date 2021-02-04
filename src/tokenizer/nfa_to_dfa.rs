@@ -1,9 +1,6 @@
-//! The logic in this file is tested indirectly, in the `nfa` module.
-
 use crate::tokenizer::dfa::DFA;
 use crate::tokenizer::nfa::NFA;
-use crate::tokenizer::states::{AcceptedStateLabel, StateSet};
-use crate::tokenizer::Symbol;
+use crate::tokenizer::states::{AcceptedStateLabel, StateSet, Symbol};
 use std::collections::{BTreeSet, HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 

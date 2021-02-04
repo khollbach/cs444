@@ -1,6 +1,5 @@
 use dfa::DFA;
-use states::{State, StateSet};
-use std::fmt;
+use states::{State, StateSet, Symbol};
 
 mod dfa;
 mod joos_1w_nfa;
@@ -67,8 +66,8 @@ pub struct Tokenizer {
 impl Tokenizer {
     /// Compile an NFA for the lexical grammar of Joos 1W into a DFA.
     ///
-    /// Be warned that this is an expensive operation. Best to avoid calling this in a loop in test
-    /// cases, etc.
+    /// Be warned that this is an expensive operation. Best to avoid calling this in a loop (e.g.
+    /// in test cases, etc.)
     pub fn new() -> Self {
         let nfa = joos_1w_nfa::nfa();
         let dfa = nfa.to_dfa();
@@ -153,32 +152,6 @@ fn line_positions<'a>(
         line,
         col,
     })
-}
-
-/// A symbol in the input stream.
-///
-/// Used to label state transitions in DFAs and NFAs.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol {
-    ascii_byte: u8,
-}
-
-impl Symbol {
-    fn new(ascii_byte: u8) -> Self {
-        assert!(ascii_byte < 128);
-        Self { ascii_byte }
-    }
-
-    fn to_char(self) -> char {
-        self.ascii_byte as char
-    }
-}
-
-impl fmt::Debug for Symbol {
-    /// We could just derive, but this avoids newlines in {:#?} output.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Symbol({:?})", self.to_char())
-    }
 }
 
 #[cfg(test)]

@@ -1,8 +1,6 @@
 use crate::tokenizer::dfa::DFA;
 use crate::tokenizer::nfa_to_dfa::NfaConverter;
-use crate::tokenizer::states::AcceptedStateLabel;
-use crate::tokenizer::states::StateSet;
-use crate::tokenizer::Symbol;
+use crate::tokenizer::states::{AcceptedStateLabel, StateSet, Symbol};
 use std::collections::HashMap as Map;
 use std::hash::Hash;
 

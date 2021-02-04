@@ -2,12 +2,11 @@ use crate::tokenizer::nfa::NFA;
 use crate::tokenizer::states::AcceptedStateLabel::{
     JavadocComment, LineComment, StarComment, TokenType as AcceptedToken, Whitespace,
 };
-use crate::tokenizer::states::{AcceptedStateLabel, State};
+use crate::tokenizer::states::{AcceptedStateLabel, State, Symbol};
 use crate::tokenizer::tokens::Literal::{Bool, Char, Int, Null, StringLit};
 use crate::tokenizer::tokens::Token::{Identifier, Literal};
 use crate::tokenizer::tokens::{Keyword, Operator, Separator, Token};
 use crate::tokenizer::tokens::{KEYWORDS, OPERATORS, SEPARATORS};
-use crate::tokenizer::Symbol;
 use std::collections::HashMap as Map;
 use StarCommentType::{Javadoc, OneStar};
 
