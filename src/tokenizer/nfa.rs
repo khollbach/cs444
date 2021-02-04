@@ -58,7 +58,7 @@ mod tests {
 
     /// This NFA recognizes the language {"a", "ab", "aba"}.
     fn simple_nfa() -> NFA<&'static str> {
-        let if_ = AcceptedStateLabel::Token(Keyword(If));
+        let if_ = AcceptedStateLabel::TokenType { type_: Keyword(If) };
 
         NFABuilder {
             init: "init",

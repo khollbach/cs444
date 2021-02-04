@@ -1,57 +1,59 @@
 use crate::tokenizer::states::AcceptedStateLabel;
 use crate::tokenizer::tokens::Literal::{self, Char, Int, StringLit};
 use crate::tokenizer::tokens::Token;
-use crate::tokenizer::{Position, Symbol, TokenInfo};
+use crate::tokenizer::{Position, Symbol, TokenInfo, TokenOrComment};
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 
 mod key_pair;
 mod string_escapes;
 
+/// A DFA used for tokenizing an input stream of symbols into an output stream of tokens.
 #[derive(Debug)]
 pub struct DFA<S> {
     pub init: S,
     pub accepted: Map<S, AcceptedStateLabel>,
+    /// If a keypair doesn't exist, this means a transition to an implicit "dead state" which isn't
+    /// accepted.
     pub delta: Map<(S, Symbol), S>,
 }
 
-impl<S: Eq + Hash> DFA<S> {
-    /// Tokenize the input stream, stripping out comments and whitespace.
+/// Return value for the `max_munch` method.
+enum LongestMatch<'a> {
+    Match(TokenOrComment<'a>),
+    Whitespace,
+    NoMatch,
+}
+
+impl<S: Eq + Hash + Debug> DFA<S> {
+    /// Tokenize the input stream by running "max munch" in a loop.
     // todo: report errors.
     pub fn tokenize<'a>(
         &'a self,
         positions: impl Iterator<Item = Position<'a>> + Clone + 'a,
-    ) -> impl Iterator<Item = TokenInfo<Token>> + 'a {
-        self.main_loop(positions).flat_map(|longest_match| {
-            match longest_match {
-                LongestMatch::Token(token) => Some(token),
-                // Silently ignore comments and whitespace.
-                LongestMatch::CommentOrWhitespace => None,
-            }
-        })
-    }
-
-    /// Run "max munch" in a loop.
-    fn main_loop<'a>(
-        &'a self,
-        positions: impl Iterator<Item = Position<'a>> + Clone + 'a,
-    ) -> impl Iterator<Item = LongestMatch> + 'a {
+    ) -> impl Iterator<Item = TokenOrComment> + 'a {
         let mut positions = positions.peekable();
 
-        iter::from_fn(move || {
+        iter::from_fn(move || loop {
             match positions.peek().copied() {
                 // The stream dried up; terminate.
-                None => None,
+                None => return None,
+
                 Some(pos) => {
-                    let ret = self.max_munch(pos, &mut positions);
+                    match self.max_munch(pos, &mut positions) {
+                        LongestMatch::Match(t) => return Some(t),
 
-                    // todo: handle errors more gracefully.
-                    let longest_match =
-                        ret.unwrap_or_else(|| panic!("Failed to tokenize at {:?}", pos));
+                        // Silently ignore, keep munching.
+                        LongestMatch::Whitespace => continue,
 
-                    Some(longest_match)
+                        LongestMatch::NoMatch => {
+                            // todo: handle errors more gracefully.
+                            panic!("Failed to tokenize at {:?}", pos);
+                        }
+                    }
                 }
             }
         })
@@ -64,20 +66,18 @@ impl<S: Eq + Hash> DFA<S> {
         &'a self,
         start: Position<'a>,
         positions: &mut (impl Iterator<Item = Position<'a>> + Clone),
-    ) -> Option<LongestMatch<'a>> {
-        // Note that we'll never check if the empty string matches, since the code below
-        // transitions states before it checks acceptance.
-        //
-        // (We don't want empty tokens anyways, and handling them would add complexity.)
-        debug_assert!(!self.accepted.contains_key(&self.init));
+    ) -> LongestMatch {
+        if self.accepted.contains_key(&self.init) {
+            panic!("Empty matches unsupported; please fix your DFA: {:?}", self);
+        }
 
-        let mut longest_match = None;
+        // Keep track of the longest match, and the positions after it.
+        let mut longest_match = LongestMatch::NoMatch;
         let mut unused_symbols = positions.clone();
 
         let mut state = &self.init;
-
         while let Some(pos) = positions.next() {
-            let key = (state, &pos.symbol()); // todo handle encoding errors (somewhere)
+            let key = (state, &pos.symbol());
             state = match self.delta.get(&key as &dyn KeyPair<_, _>) {
                 Some(next) => next,
                 // Implicit "dead" state, stop scanning.
@@ -85,14 +85,22 @@ impl<S: Eq + Hash> DFA<S> {
             };
 
             if let Some(label) = self.accepted.get(state) {
-                // Keep track of the longest match, and the positions after it.
-                longest_match = Some(match label {
-                    AcceptedStateLabel::Token(val) => {
-                        LongestMatch::Token(make_token(val, start, pos))
-                    }
-                    AcceptedStateLabel::CommentOrWhitespace => LongestMatch::CommentOrWhitespace,
-                });
                 unused_symbols = positions.clone();
+                longest_match = match label {
+                    AcceptedStateLabel::TokenType { type_ } => {
+                        LongestMatch::Match(TokenOrComment::Token(token_info(type_, start, pos)))
+                    }
+                    AcceptedStateLabel::LineComment => {
+                        LongestMatch::Match(TokenOrComment::LineComment { start })
+                    }
+                    AcceptedStateLabel::StarComment | AcceptedStateLabel::JavadocComment => {
+                        LongestMatch::Match(TokenOrComment::StarComment {
+                            start,
+                            end_inclusive: pos,
+                        })
+                    }
+                    AcceptedStateLabel::Whitespace => LongestMatch::Whitespace,
+                };
             }
         }
 
@@ -103,24 +111,15 @@ impl<S: Eq + Hash> DFA<S> {
     }
 }
 
-enum LongestMatch<'a> {
-    Token(TokenInfo<'a, Token<'a>>),
-    CommentOrWhitespace,
-}
-
 /// Create TokenInfo from a token type.
 ///
 /// Note that `start` and `end` are both inclusive!!!
-fn make_token<'a>(
-    val: &Token<'static>,
-    start: Position<'a>,
-    end: Position<'a>,
-) -> TokenInfo<'a, Token<'a>> {
+fn token_info<'a>(type_: &Token<'static>, start: Position<'a>, end: Position<'a>) -> TokenInfo<'a> {
     // Note the inclusive range.
     let lexeme = &start.line[start.col..=end.col];
 
     // Fill in the guts of the token, if applicable.
-    let val = match val {
+    let val = match type_ {
         Token::Identifier(_) => Token::Identifier(lexeme),
         Token::Literal(lit) => Token::Literal(match lit {
             Int(_) => {
@@ -249,7 +248,10 @@ mod tests {
     fn simple_dfa() -> DFA<&'static str> {
         DFABuilder {
             init: "init",
-            accepted: vec![("accept", AcceptedStateLabel::Token(Keyword(If)))],
+            accepted: vec![(
+                "accept",
+                AcceptedStateLabel::TokenType { type_: Keyword(If) },
+            )],
             delta: vec![
                 (("init", 'a'), "accept"),
                 (("init", 'b'), "b"),
@@ -272,10 +274,7 @@ mod tests {
     }
 
     /// Run the DFA on one line of ASCII text, to tokenize it.
-    fn tokenize_one_line<'a>(
-        dfa: &'a DFA<&'a str>,
-        line: &'a str,
-    ) -> Vec<TokenInfo<'a, Token<'a>>> {
+    fn tokenize_one_line<'a>(dfa: &'a DFA<&'a str>, line: &'a str) -> Vec<TokenOrComment<'a>> {
         let positions = tokenizer::all_positions(iter::once(line));
 
         // Skip the special "newline" position at the end of `all_positions`.
@@ -294,8 +293,11 @@ mod tests {
         let expected = vec!["a", "ba", "a", "a", "ba", "ba"];
 
         let mut actual = vec![];
-        for token in tokenize_one_line(&dfa, input) {
-            actual.push(token.lexeme);
+        for elem in tokenize_one_line(&dfa, input) {
+            match elem {
+                TokenOrComment::Token(t) => actual.push(t.lexeme),
+                _ => panic!(),
+            };
         }
         assert_eq!(expected, actual);
     }

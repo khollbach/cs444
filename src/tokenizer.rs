@@ -13,18 +13,48 @@ pub use tokens::Token;
 
 /// A token in the output stream of the tokenizer, together with some metadata about where it is in
 /// the input stream.
+///
+/// The metadata helps us provide the user with better error messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TokenInfo<'a, T: 'a> {
-    pub val: T,
+pub struct TokenInfo<'a> {
+    pub val: Token<'a>,
     pub start: Position<'a>,
     pub lexeme: &'a str,
 }
 
-impl<'a, T> TokenInfo<'a, T> {
+impl TokenInfo<'_> {
     /// Zero-indexed, exclusive.
     pub fn end_col(&self) -> usize {
-        // Relies on the token being ASCII-only.
+        // Relies on the token being single-line and ASCII-only.
+        // (This is true of all tokens in our language, so we're good.)
         self.start.col + self.lexeme.len()
+    }
+}
+
+/// The tokenizer also supports producing an output stream with comments included.
+///
+/// This is the element type of that alternative output stream.
+#[derive(Debug, Clone)]
+pub enum TokenOrComment<'a> {
+    Token(TokenInfo<'a>),
+    LineComment {
+        start: Position<'a>,
+    },
+    StarComment {
+        start: Position<'a>,
+        /// Inclusive!
+        end_inclusive: Position<'a>,
+    },
+}
+
+impl<'a> TokenOrComment<'a> {
+    pub fn start(&self) -> Position<'a> {
+        use TokenOrComment::*;
+        match self {
+            Token(t) => t.start,
+            LineComment { start } => *start,
+            StarComment { start, .. } => *start,
+        }
     }
 }
 
@@ -46,11 +76,24 @@ impl Tokenizer {
         Self { dfa }
     }
 
-    /// Run the "max munch" scanning algorithm to tokenize the input.
+    /// Tokenize the input, stripping out comments.
     pub fn tokenize<'a>(
         &'a self,
         lines: impl Iterator<Item = &'a str> + Clone + 'a,
-    ) -> impl Iterator<Item = TokenInfo<Token>> + 'a {
+    ) -> impl Iterator<Item = TokenInfo> + 'a {
+        self.tokenize_keep_comments(lines)
+            .filter_map(|elem| match elem {
+                TokenOrComment::Token(t) => Some(t),
+                TokenOrComment::LineComment { .. } => None,
+                TokenOrComment::StarComment { .. } => None,
+            })
+    }
+
+    /// Run the "max munch" scanning algorithm to tokenize the input.
+    pub fn tokenize_keep_comments<'a>(
+        &'a self,
+        lines: impl Iterator<Item = &'a str> + Clone + 'a,
+    ) -> impl Iterator<Item = TokenOrComment> + 'a {
         self.dfa.tokenize(all_positions(lines))
     }
 }
@@ -168,7 +211,7 @@ mod tests {
     /// This is more detailed than `TestCase`, but also more tedious to specify.
     struct DetailedTestCase<'a> {
         input: Vec<&'a str>,
-        expected_output: Vec<TokenInfo<'a, Token<'a>>>,
+        expected_output: Vec<TokenInfo<'a>>,
     }
 
     impl<'a> DetailedTestCase<'a> {
@@ -185,6 +228,7 @@ mod tests {
         let tokenizer = Tokenizer::new();
 
         for (input, expected_output) in vec![
+            (vec![""], vec![]),
             (
                 vec!["if while else"],
                 vec![Keyword(If), Keyword(While), Keyword(Else)],

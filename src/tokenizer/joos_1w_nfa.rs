@@ -1,6 +1,7 @@
 use crate::tokenizer::nfa::NFA;
-use crate::tokenizer::states::AcceptedStateLabel::CommentOrWhitespace;
-use crate::tokenizer::states::AcceptedStateLabel::Token as AcceptedToken;
+use crate::tokenizer::states::AcceptedStateLabel::{
+    JavadocComment, LineComment, StarComment, TokenType as AcceptedToken, Whitespace,
+};
 use crate::tokenizer::states::{AcceptedStateLabel, State};
 use crate::tokenizer::tokens::Literal::{Bool, Char, Int, Null, StringLit};
 use crate::tokenizer::tokens::Token::{Identifier, Literal};
@@ -33,6 +34,7 @@ pub fn nfa() -> NFA<State> {
     for &op in &OPERATORS {
         builder.operator(op);
     }
+
     builder.literals();
 
     // This should appear after most things, to correctly break ties in favor of keywords, null
@@ -40,6 +42,12 @@ pub fn nfa() -> NFA<State> {
     builder.identifiers();
 
     builder.nfa
+}
+
+/// Input type of the helper method `star_comments`.
+enum StarCommentType {
+    OneStar,
+    Javadoc,
 }
 
 /// An NFA builder for Joos 1W.
@@ -116,7 +124,7 @@ impl NFABuilder {
     /// This can be used to add a keyword to the tokenizer, for example. `s` must be ascii.
     ///
     /// Basically, this just generates a linked list of states.
-    fn exact_match(&mut self, s: &str, token_type: Token<'static>) {
+    fn exact_match(&mut self, s: &str, type_: Token<'static>) {
         assert!(!s.is_empty());
 
         let start = self.new_state();
@@ -129,7 +137,7 @@ impl NFABuilder {
             prev = curr;
         }
 
-        let label = AcceptedToken(token_type);
+        let label = AcceptedToken { type_ };
         self.nfa.accepted.insert(prev, label);
     }
 
@@ -155,7 +163,9 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = AcceptedToken(Literal(Int(0)));
+        let label = AcceptedToken {
+            type_: Literal(Int(0)),
+        };
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -172,7 +182,9 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = 55555;
-        let label = AcceptedToken(Literal(Int(filler)));
+        let label = AcceptedToken {
+            type_: Literal(Int(filler)),
+        };
         self.nfa.accepted.insert(end, label);
 
         // start -> end
@@ -198,14 +210,18 @@ impl NFABuilder {
     /// Recognize string literals.
     fn strings(&mut self) {
         let filler = String::from("-*-java-string-literal-*-");
-        let label = AcceptedToken(Literal(StringLit(filler)));
+        let label = AcceptedToken {
+            type_: Literal(StringLit(filler)),
+        };
         self.strings_or_chars('"', label);
     }
 
     /// Recognize character literals.
     fn chars(&mut self) {
         let filler = '?';
-        let label = AcceptedToken(Literal(Char(filler)));
+        let label = AcceptedToken {
+            type_: Literal(Char(filler)),
+        };
         self.strings_or_chars('\'', label);
     }
 
@@ -266,7 +282,9 @@ impl NFABuilder {
         self.eps(start);
 
         let filler = "-*-java-identifier-*-";
-        let label = AcceptedToken(Identifier(filler));
+        let label = AcceptedToken {
+            type_: Identifier(filler),
+        };
         self.nfa.accepted.insert(end, label);
 
         for sym in constants::letters() {
@@ -288,8 +306,8 @@ impl NFABuilder {
         self.line_comments();
 
         // Javadoc comments should precede normal ones, to correctly break the tie.
-        self.star_comments(Javadoc);
-        self.star_comments(OneStar);
+        self.star_comments(StarCommentType::Javadoc);
+        self.star_comments(StarCommentType::OneStar);
     }
 
     /// Add states to recognize line comments.
@@ -302,7 +320,7 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = CommentOrWhitespace;
+        let label = LineComment;
         self.nfa.accepted.insert(end, label);
 
         // start -> one_slash
@@ -332,10 +350,10 @@ impl NFABuilder {
         self.eps(start);
 
         let label = match val {
-            OneStar => CommentOrWhitespace,
+            StarCommentType::OneStar => StarComment,
             // For now, we're just silent discarding doc comments; same as regular comments.
             // Maybe at some point we'll want to do something different with these...
-            Javadoc => CommentOrWhitespace,
+            StarCommentType::Javadoc => JavadocComment,
         };
         self.nfa.accepted.insert(end, label);
 
@@ -389,7 +407,7 @@ impl NFABuilder {
 
         self.eps(start);
 
-        let label = CommentOrWhitespace;
+        let label = Whitespace;
         self.nfa.accepted.insert(end, label);
 
         for sym in constants::whitespace() {
@@ -400,11 +418,6 @@ impl NFABuilder {
             self.delta(end, sym, end);
         }
     }
-}
-
-enum StarCommentType {
-    OneStar,
-    Javadoc,
 }
 
 #[cfg(test)]

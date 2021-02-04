@@ -4,14 +4,18 @@ use std::iter::FromIterator;
 use std::rc::Rc;
 
 /// Used in NFAs and DFAs to label each accepted state with the token type it accepts.
-///
-/// Beware that the inner data of the `Token` is likely just filler. E.g., it will never
-/// contain an actual string literal from the input stream. So you'll have to fill it in during
-/// tokenizing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AcceptedStateLabel {
-    Token(Token<'static>),
-    CommentOrWhitespace,
+    /// Beware that the inner data of the `Token` is likely just filler. E.g., it will never
+    /// contain an actual identifier from the input stream. So you'll have to fill it in during
+    /// tokenizing.
+    TokenType {
+        type_: Token<'static>,
+    },
+    LineComment,
+    StarComment,
+    JavadocComment,
+    Whitespace,
 }
 
 /// A state of a DFA or NFA.
