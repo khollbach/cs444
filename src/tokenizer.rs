@@ -8,7 +8,11 @@ mod nfa_to_dfa;
 mod states;
 mod tokens;
 
+// Expose `Token` and its variants to the public API of `tokenizer`.
 pub use tokens::Token;
+pub mod token_types {
+    pub use crate::tokenizer::tokens::{Keyword, Literal, Operator, Separator};
+}
 
 /// A token in the output stream of the tokenizer, together with some metadata about where it is in
 /// the input stream.

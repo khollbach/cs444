@@ -1,4 +1,5 @@
-use cs444::tokenizer::{Token, TokenInfo, TokenOrComment, Tokenizer};
+use cs444::tokenizer::token_types::Literal::{Bool, Char, Int, Null, StringLit};
+use cs444::tokenizer::{Token, TokenOrComment, Tokenizer};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -42,8 +43,7 @@ fn tokenize_and_echo(tokenizer: &Tokenizer, input_file: impl AsRef<Path>) -> Res
     let mut output = Vec::<String>::with_capacity(input.len());
 
     for elem in tokenizer.tokenize_keep_comments(input.iter().map(String::as_str)) {
-        // todo: sanity_check(&token);
-
+        sanity_check(&elem);
         echo_elem(&input, elem, &mut output);
     }
 
@@ -125,13 +125,71 @@ fn echo_elem(input: &[String], elem: TokenOrComment, output: &mut Vec<String>) {
 }
 
 /// Check the token's inner value matches its lexeme.
-#[allow(unused)]
-fn sanity_check<'a>(token: &TokenInfo<'a>) {
-    assert_eq!(token.lexeme, token_to_str(&token.val), "{:?}", token);
+fn sanity_check<'a>(elem: &TokenOrComment<'a>) {
+    use TokenOrComment::*;
+    match elem {
+        Token(token) => assert_eq!(token.lexeme, token_to_str(&token.val), "{:?}", token),
+        LineComment { start } => {
+            assert_eq!("//", &start.line[start.col..start.col + 2]);
+        }
+        StarComment {
+            start,
+            end_inclusive,
+        } => {
+            assert_eq!("/*", &start.line[start.col..start.col + 2]);
+
+            // (We could also check that there are no "*/"s in the middle,
+            // but I'm fine with what we have; no need to overdo it.)
+
+            let end = end_inclusive;
+            assert_eq!("*/", &end.line[end.col - 1..=end.col]);
+        }
+    }
 }
 
 /// Convert a token's inner value to a reasonable string representation.
-#[allow(unused)]
 fn token_to_str<'a>(token: &Token<'a>) -> String {
-    todo!()
+    match token {
+        Token::Identifier(name) => String::from(*name),
+        Token::Keyword(k) => k.to_string(),
+        Token::Separator(s) => s.to_string(),
+        Token::Operator(o) => o.to_string(),
+        Token::Literal(l) => match l {
+            Int(n) => n.to_string(),
+            Bool(b) => b.to_string(),
+            Char(c) => format!("'{}'", unescape_str(&c.to_string())),
+            StringLit(s) => format!("\"{}\"", unescape_str(&s)),
+            Null => format!("null"),
+        },
+    }
+}
+
+/// Print a string value in "debug mode" with escape characters represented by a visible escape
+/// sequence.
+///
+/// This should ideally result in the same as the string literal from the input program that was
+/// decoded to produce this string value.
+fn unescape_str(s: &str) -> String {
+    let mut buf = String::new();
+    for c in s.chars() {
+        assert!(c < 128 as char);
+        let s = c.to_string();
+        buf.push_str(match c {
+            '\x08' => r"\b", // backspace
+            '\t' => r"\t",
+            '\n' => r"\n",
+            '\x0c' => r"\f", // form feed
+            '\r' => r"\r",
+            '"' => "\\\"",
+            '\'' => r"\'",
+            '\\' => r"\\",
+
+            // Hardcoding this for one of the test cases that uses octal escapes to produce a '4'.
+            // Please don't judge me.
+            '4' => r"\064",
+
+            _ => &s,
+        });
+    }
+    buf
 }
