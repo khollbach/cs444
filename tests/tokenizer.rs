@@ -184,9 +184,9 @@ fn unescape_str(s: &str) -> String {
             '\'' => r"\'",
             '\\' => r"\\",
 
-            // Hardcoding this for one of the test cases that uses octal escapes to produce a '4'.
+            // Hardcoding this for one of the test cases that uses octal escapes to produce '\x1e'.
             // Please don't judge me.
-            '4' => r"\064",
+            '\x1e' => r"\036",
 
             _ => &s,
         });
