@@ -1,4 +1,5 @@
-use std::fmt;
+use crate::tokenizer::token_types::{Keyword, Literal, Operator, Separator};
+use crate::tokenizer::Position;
 
 /// Diffent types of tokens in the language.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,322 +11,63 @@ pub enum Token<'a> {
     Operator(Operator),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Keyword {
-    Abstract,
-    Boolean,
-    Break,
-    Byte,
-    Case,
-    Catch,
-    Char,
-    Class,
-    Const,
-    Continue,
-    Default,
-    Do,
-    Double,
-    Else,
-    Extends,
-    Final,
-    Finally,
-    Float,
-    For,
-    Goto,
-    If,
-    Implements,
-    Import,
-    Instanceof,
-    Int,
-    Interface,
-    Long,
-    Native,
-    New,
-    Package,
-    Private,
-    Protected,
-    Public,
-    Return,
-    Short,
-    Static,
-    Strictfp,
-    Super,
-    Switch,
-    Synchronized,
-    This,
-    Throw,
-    Throws,
-    Transient,
-    Try,
-    Void,
-    Volatile,
-    While,
-}
-
+/// A token in the output stream of the tokenizer, together with some metadata about where it is in
+/// the input stream.
+///
+/// The metadata helps us provide the user with better error messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Literal {
-    /// Anywhere in 0..=2^31, but 2^31 should fail to parse unless it is preceeded by a unary
-    /// negation operator.
-    Int(u32),
-    Bool(bool),
-    /// (If this was an escaped character, it has been resolved.)
-    Char(char),
-    /// Escape characters have been resolved.
-    StringLit(String),
-    Null,
+pub struct TokenInfo<'a> {
+    pub val: Token<'a>,
+    pub start: Position<'a>,
+    pub lexeme: &'a str,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Separator {
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    LBracket,
-    RBracket,
-    Semicolon,
-    Comma,
-    Dot,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Operator {
-    Assign,
-    Gt,
-    Lt,
-    Not,
-    BitNot,
-    Question,
-    Colon,
-    Eq,
-    Le,
-    Ge,
-    Ne,
-    And,
-    Or,
-    Increment,
-    Decrement,
-    Plus,
-    Minus,
-    Star,
-    Divide,
-    BitAnd,
-    BitOr,
-    BirXor,
-    Mod,
-    LShift,
-    RShift,
-    URShift,
-    PlusEq,
-    MinusEq,
-    TimesEq,
-    DivideEq,
-    BitAndEq,
-    BitOrEq,
-    BitXorEq,
-    ModEq,
-    LShiftEq,
-    RShiftEq,
-    URShiftEq,
-}
-
-pub const KEYWORDS: [Keyword; 48] = {
-    use Keyword::*;
-
-    [
-        Abstract,
-        Boolean,
-        Break,
-        Byte,
-        Case,
-        Catch,
-        Char,
-        Class,
-        Const,
-        Continue,
-        Default,
-        Do,
-        Double,
-        Else,
-        Extends,
-        Final,
-        Finally,
-        Float,
-        For,
-        Goto,
-        If,
-        Implements,
-        Import,
-        Instanceof,
-        Int,
-        Interface,
-        Long,
-        Native,
-        New,
-        Package,
-        Private,
-        Protected,
-        Public,
-        Return,
-        Short,
-        Static,
-        Strictfp,
-        Super,
-        Switch,
-        Synchronized,
-        This,
-        Throw,
-        Throws,
-        Transient,
-        Try,
-        Void,
-        Volatile,
-        While,
-    ]
-};
-
-pub const SEPARATORS: [Separator; 9] = {
-    use Separator::*;
-
-    [
-        LParen, RParen, LBrace, RBrace, LBracket, RBracket, Semicolon, Comma, Dot,
-    ]
-};
-
-pub const OPERATORS: [Operator; 37] = {
-    use Operator::*;
-
-    [
-        Assign, Gt, Lt, Not, BitNot, Question, Colon, Eq, Le, Ge, Ne, And, Or, Increment,
-        Decrement, Plus, Minus, Star, Divide, BitAnd, BitOr, BirXor, Mod, LShift, RShift, URShift,
-        PlusEq, MinusEq, TimesEq, DivideEq, BitAndEq, BitOrEq, BitXorEq, ModEq, LShiftEq, RShiftEq,
-        URShiftEq,
-    ]
-};
-
-impl fmt::Display for Keyword {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Keyword::*;
-
-        let s = match self {
-            Abstract => "abstract",
-            Boolean => "boolean",
-            Break => "break",
-            Byte => "byte",
-            Case => "case",
-            Catch => "catch",
-            Char => "char",
-            Class => "class",
-            Const => "const",
-            Continue => "continue",
-            Default => "default",
-            Do => "do",
-            Double => "double",
-            Else => "else",
-            Extends => "extends",
-            Final => "final",
-            Finally => "finally",
-            Float => "float",
-            For => "for",
-            Goto => "goto",
-            If => "if",
-            Implements => "implements",
-            Import => "import",
-            Instanceof => "instanceof",
-            Int => "int",
-            Interface => "interface",
-            Long => "long",
-            Native => "native",
-            New => "new",
-            Package => "package",
-            Private => "private",
-            Protected => "protected",
-            Public => "public",
-            Return => "return",
-            Short => "short",
-            Static => "static",
-            Strictfp => "strictfp",
-            Super => "super",
-            Switch => "switch",
-            Synchronized => "synchronized",
-            This => "this",
-            Throw => "throw",
-            Throws => "throws",
-            Transient => "transient",
-            Try => "try",
-            Void => "void",
-            Volatile => "volatile",
-            While => "while",
-        };
-
-        write!(f, "{}", s)
+impl TokenInfo<'_> {
+    /// Zero-indexed, exclusive.
+    pub fn end_col(&self) -> usize {
+        // Relies on the token being single-line and ASCII-only.
+        // (This is true of all tokens in our language, so we're good.)
+        self.start.col + self.lexeme.len()
     }
 }
 
-impl fmt::Display for Separator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Separator::*;
+/// The tokenizer also supports producing an output stream with comments included.
+///
+/// This is the element type of that alternative output stream.
+#[derive(Debug, Clone)]
+pub enum TokenOrComment<'a> {
+    Token(TokenInfo<'a>),
+    LineComment {
+        start: Position<'a>,
+    },
+    StarComment {
+        start: Position<'a>,
+        /// Inclusive!
+        end_inclusive: Position<'a>,
+    },
+}
 
-        let s = match self {
-            LParen => "(",
-            RParen => ")",
-            LBrace => "{",
-            RBrace => "}",
-            LBracket => "[",
-            RBracket => "]",
-            Semicolon => ";",
-            Comma => ",",
-            Dot => ".",
-        };
-
-        write!(f, "{}", s)
+impl<'a> TokenOrComment<'a> {
+    pub fn start(&self) -> Position<'a> {
+        use TokenOrComment::*;
+        match self {
+            Token(t) => t.start,
+            LineComment { start } => *start,
+            StarComment { start, .. } => *start,
+        }
     }
 }
 
-impl fmt::Display for Operator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Operator::*;
-
-        let s = match self {
-            Assign => "=",
-            Gt => ">",
-            Lt => "<",
-            Not => "!",
-            BitNot => "~",
-            Question => "?",
-            Colon => ":",
-            Eq => "==",
-            Le => "<=",
-            Ge => ">=",
-            Ne => "!=",
-            And => "&&",
-            Or => "||",
-            Increment => "++",
-            Decrement => "--",
-            Plus => "+",
-            Minus => "-",
-            Star => "*",
-            Divide => "/",
-            BitAnd => "&",
-            BitOr => "|",
-            BirXor => "^",
-            Mod => "%",
-            LShift => "<<",
-            RShift => ">>",
-            URShift => ">>>",
-            PlusEq => "+=",
-            MinusEq => "-=",
-            TimesEq => "*=",
-            DivideEq => "/=",
-            BitAndEq => "&=",
-            BitOrEq => "|=",
-            BitXorEq => "^=",
-            ModEq => "%=",
-            LShiftEq => "<<=",
-            RShiftEq => ">>=",
-            URShiftEq => ">>>=",
-        };
-
-        write!(f, "{}", s)
-    }
+/// An error encountered while tokenizing.
+pub enum TokenError<'a> {
+    /// The input contained a non-ascii character. We currently don't support these.
+    NonAsciiChar { c: char, pos: Position<'a> },
+    /// Not a token, nor a prefix of a token.
+    NotAToken {
+        start: Position<'a>,
+        /// Exclusive.
+        end: Position<'a>,
+    },
+    /// A star-comment that is never closed. (The input stream ended first.)
+    UnclosedComment { start: Position<'a> },
 }

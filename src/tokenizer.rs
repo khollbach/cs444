@@ -1,65 +1,36 @@
+//! This module contains the logic for breaking an input stream into tokens.
+//!
+//! The tokenizer can be used as follows:
+//! ```
+//! # use cs444::tokenizer::Tokenizer;
+//!
+//! let input = vec![
+//!     "class A {",
+//!     "  public static void run() {",
+//!     "    1 + 1;",
+//!     "  }",
+//!     "}",
+//! ];
+//!
+//! let tokenizer = Tokenizer::new();
+//!
+//! for token in tokenizer.tokenize(input.into_iter()) {
+//!     // do something interesting ...
+//!     dbg!(token);
+//! }
+//! ```
+
 use dfa::DFA;
 use states::{State, StateSet, Symbol};
+use tokens::{TokenInfo, TokenOrComment};
 
 mod dfa;
 mod joos_1w_nfa;
 mod nfa;
 mod nfa_to_dfa;
 mod states;
-mod tokens;
-
-// Expose `Token` and its variants to the public API of `tokenizer`.
-pub use tokens::Token;
-pub mod token_types {
-    pub use crate::tokenizer::tokens::{Keyword, Literal, Operator, Separator};
-}
-
-/// A token in the output stream of the tokenizer, together with some metadata about where it is in
-/// the input stream.
-///
-/// The metadata helps us provide the user with better error messages.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TokenInfo<'a> {
-    pub val: Token<'a>,
-    pub start: Position<'a>,
-    pub lexeme: &'a str,
-}
-
-impl TokenInfo<'_> {
-    /// Zero-indexed, exclusive.
-    pub fn end_col(&self) -> usize {
-        // Relies on the token being single-line and ASCII-only.
-        // (This is true of all tokens in our language, so we're good.)
-        self.start.col + self.lexeme.len()
-    }
-}
-
-/// The tokenizer also supports producing an output stream with comments included.
-///
-/// This is the element type of that alternative output stream.
-#[derive(Debug, Clone)]
-pub enum TokenOrComment<'a> {
-    Token(TokenInfo<'a>),
-    LineComment {
-        start: Position<'a>,
-    },
-    StarComment {
-        start: Position<'a>,
-        /// Inclusive!
-        end_inclusive: Position<'a>,
-    },
-}
-
-impl<'a> TokenOrComment<'a> {
-    pub fn start(&self) -> Position<'a> {
-        use TokenOrComment::*;
-        match self {
-            Token(t) => t.start,
-            LineComment { start } => *start,
-            StarComment { start, .. } => *start,
-        }
-    }
-}
+pub mod token_types;
+pub mod tokens;
 
 /// Tokenizer for the Joos 1W language.
 #[derive(Debug)]
@@ -161,10 +132,10 @@ fn line_positions<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokens::Keyword::{Else, If, While};
-    use tokens::Operator::{Assign, Le};
-    use tokens::Separator::{Comma, Dot, LBrace, RBrace};
-    use tokens::Token::{Keyword, Operator, Separator};
+    use token_types::Keyword::{Else, If, While};
+    use token_types::Operator::{Assign, Le};
+    use token_types::Separator::{Comma, Dot, LBrace, RBrace};
+    use tokens::Token::{self, Keyword, Operator, Separator};
 
     /// A test case for the tokenizer. Only the tokens' inner values are checked.
     pub struct TestCase<'a> {

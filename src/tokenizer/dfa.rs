@@ -1,7 +1,7 @@
 use crate::tokenizer::states::{AcceptedStateLabel, Symbol};
-use crate::tokenizer::tokens::Literal::{self, Char, Int, StringLit};
-use crate::tokenizer::tokens::Token;
-use crate::tokenizer::{Position, TokenInfo, TokenOrComment};
+use crate::tokenizer::token_types::Literal::{self, Char, Int, StringLit};
+use crate::tokenizer::tokens::{Token, TokenInfo, TokenOrComment};
+use crate::tokenizer::Position;
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
 use std::fmt::Debug;
@@ -216,7 +216,7 @@ impl<S: Eq + Hash> DFA<S> {
 mod tests {
     use super::*;
     use crate::tokenizer;
-    use crate::tokenizer::tokens::Keyword::If;
+    use crate::tokenizer::token_types::Keyword::If;
     use crate::tokenizer::tokens::Token::Keyword;
 
     /// Helper struct for specifying small DFAs in unit tests.

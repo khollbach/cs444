@@ -3,10 +3,10 @@ use crate::tokenizer::states::AcceptedStateLabel::{
     JavadocComment, LineComment, StarComment, TokenType as AcceptedToken, Whitespace,
 };
 use crate::tokenizer::states::{AcceptedStateLabel, State, Symbol};
-use crate::tokenizer::tokens::Literal::{Bool, Char, Int, Null, StringLit};
-use crate::tokenizer::tokens::Token::{Identifier, Literal};
-use crate::tokenizer::tokens::{Keyword, Operator, Separator, Token};
-use crate::tokenizer::tokens::{KEYWORDS, OPERATORS, SEPARATORS};
+use crate::tokenizer::token_types::Literal::{Bool, Char, Int, Null, StringLit};
+use crate::tokenizer::token_types::{Keyword, Operator, Separator};
+use crate::tokenizer::token_types::{KEYWORDS, OPERATORS, SEPARATORS};
+use crate::tokenizer::tokens::Token::{self, Identifier, Literal};
 use std::collections::HashMap as Map;
 use StarCommentType::{Javadoc, OneStar};
 
@@ -422,7 +422,7 @@ impl NFABuilder {
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::tests::TestCase;
-    use crate::tokenizer::tokens::Literal::StringLit;
+    use crate::tokenizer::token_types::Literal::StringLit;
     use crate::tokenizer::tokens::Token::Literal;
     use crate::tokenizer::Tokenizer;
 

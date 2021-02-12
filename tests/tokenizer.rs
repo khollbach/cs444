@@ -1,5 +1,6 @@
 use cs444::tokenizer::token_types::Literal::{Bool, Char, Int, Null, StringLit};
-use cs444::tokenizer::{Token, TokenOrComment, Tokenizer};
+use cs444::tokenizer::tokens::{Token, TokenOrComment};
+use cs444::tokenizer::Tokenizer;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
