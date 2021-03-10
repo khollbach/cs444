@@ -1,5 +1,7 @@
 use crate::tokenizer::token_types::{Keyword, Literal, Operator, Separator};
 use crate::tokenizer::Position;
+use std::error::Error;
+use std::fmt;
 
 /// Diffent types of tokens in the language.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,15 +61,35 @@ impl<'a> TokenOrComment<'a> {
 }
 
 /// An error encountered while tokenizing.
-pub enum TokenError<'a> {
+#[derive(Debug)]
+pub struct TokenError<'a> {
+    pub start: Position<'a>,
+    pub type_: TokenErrorType<'a>,
+}
+
+/// Types of `TokenError`s.
+#[derive(Debug)]
+pub enum TokenErrorType<'a> {
     /// The input contained a non-ascii character. We currently don't support these.
-    NonAsciiChar { c: char, pos: Position<'a> },
+    NonAsciiChar { c: char },
     /// Not a token, nor a prefix of a token.
     NotAToken {
-        start: Position<'a>,
-        /// Exclusive.
+        /// Exclusive!
         end: Position<'a>,
     },
     /// A star-comment that is never closed. (The input stream ended first.)
-    UnclosedComment { start: Position<'a> },
+    UnclosedComment,
+    /// An unclosed string literal. (The line ended first.)
+    UnclosedStringLit,
+    /// An unclosed char literal. (The line ended first.)
+    UnclosedCharLit,
 }
+
+impl<'a> fmt::Display for TokenError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // todo implement half-decent error display
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<'a> Error for TokenError<'a> {}

@@ -3,6 +3,8 @@
 //! The tokenizer can be used as follows:
 //! ```
 //! # use cs444::tokenizer::Tokenizer;
+//! # use std::error::Error;
+//! # fn main() -> Result<(), Box<dyn Error>> {
 //!
 //! let input = vec![
 //!     "class A {",
@@ -15,14 +17,17 @@
 //! let tokenizer = Tokenizer::new();
 //!
 //! for token in tokenizer.tokenize(input.into_iter()) {
-//!     // do something interesting ...
-//!     dbg!(token);
+//!     // Do something interesting ... should also handle errors.
+//!     dbg!(token.expect("Oops, the input didn't tokenize."));
 //! }
+//!
+//! # Ok(())
+//! # }
 //! ```
 
 use dfa::DFA;
 use states::{State, StateSet, Symbol};
-use tokens::{TokenInfo, TokenOrComment};
+use tokens::{TokenError, TokenErrorType, TokenInfo, TokenOrComment};
 
 mod dfa;
 mod joos_1w_nfa;
@@ -54,12 +59,16 @@ impl Tokenizer {
     pub fn tokenize<'a>(
         &'a self,
         lines: impl Iterator<Item = &'a str> + Clone + 'a,
-    ) -> impl Iterator<Item = TokenInfo> + 'a {
+    ) -> impl Iterator<Item = Result<TokenInfo, TokenError>> + 'a {
         self.tokenize_keep_comments(lines)
             .filter_map(|elem| match elem {
-                TokenOrComment::Token(t) => Some(t),
-                TokenOrComment::LineComment { .. } => None,
-                TokenOrComment::StarComment { .. } => None,
+                Ok(TokenOrComment::Token(info)) => Some(Ok(info)),
+
+                // Silently discard comments.
+                Ok(TokenOrComment::LineComment { .. }) => None,
+                Ok(TokenOrComment::StarComment { .. }) => None,
+
+                Err(e) => Some(Err(e)),
             })
     }
 
@@ -67,7 +76,7 @@ impl Tokenizer {
     pub fn tokenize_keep_comments<'a>(
         &'a self,
         lines: impl Iterator<Item = &'a str> + Clone + 'a,
-    ) -> impl Iterator<Item = TokenOrComment> + 'a {
+    ) -> impl Iterator<Item = Result<TokenOrComment, TokenError>> + 'a {
         self.dfa.tokenize(all_positions(lines))
     }
 }
@@ -88,18 +97,32 @@ impl<'a> Position<'a> {
     ///
     /// As a special case, if the current position is 1 past the end of the current line, then we
     /// return a "newline" symbol. This makes up for `line` not containing a newline character.
-    fn symbol(&self) -> Symbol {
+    ///
+    /// Return an error if we detect non-ascii input.
+    fn symbol(self) -> Result<Symbol, TokenError<'a>> {
         assert!(self.col <= self.line.len());
         if self.col == self.line.len() {
-            return Symbol::new(b'\n');
+            return Ok(Symbol::new(b'\n'));
         }
 
         let b = self.line.as_bytes()[self.col];
 
-        // todo gracefully handle encoding errors!!
-        assert!(b < 128, "Not ASCII: 0x{:x}", b);
-
-        Symbol::new(b)
+        if b < 128 {
+            Ok(Symbol::new(b))
+        } else {
+            // `b` is not an ascii byte.
+            // Return an error with the first non-ascii byte in this line.
+            for (col, c) in self.line.chars().enumerate() {
+                if c >= 128 as char {
+                    let pos = Position { col, ..self };
+                    return Err(TokenError {
+                        start: pos,
+                        type_: TokenErrorType::NonAsciiChar { c },
+                    });
+                }
+            }
+            unreachable!();
+        }
     }
 }
 
@@ -148,7 +171,7 @@ mod tests {
         pub fn run(self, tokenizer: &Tokenizer) {
             let mut actual = vec![];
             for token in tokenizer.tokenize(self.input.into_iter()) {
-                actual.push(token.val);
+                actual.push(token.unwrap().val);
             }
             assert_eq!(self.expected_output, actual);
         }
@@ -165,8 +188,8 @@ mod tests {
     impl<'a> DetailedTestCase<'a> {
         /// Panics if the input doesn't tokenize as expected.
         fn run(self, tokenizer: &Tokenizer) {
-            let actual: Vec<_> = tokenizer.tokenize(self.input.into_iter()).collect();
-            assert_eq!(self.expected_output, actual);
+            let actual: Result<Vec<_>, _> = tokenizer.tokenize(self.input.into_iter()).collect();
+            assert_eq!(self.expected_output, actual.unwrap());
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::tokenizer::states::{AcceptedStateLabel, Symbol};
 use crate::tokenizer::token_types::Literal::{self, Char, Int, StringLit};
-use crate::tokenizer::tokens::{Token, TokenInfo, TokenOrComment};
+use crate::tokenizer::tokens::{Token, TokenError, TokenErrorType, TokenInfo, TokenOrComment};
 use crate::tokenizer::Position;
 use key_pair::KeyPair;
 use std::collections::HashMap as Map;
@@ -25,33 +25,39 @@ pub struct DFA<S> {
 enum LongestMatch<'a> {
     Match(TokenOrComment<'a>),
     Whitespace,
-    NoMatch,
 }
 
 impl<S: Eq + Hash + Debug> DFA<S> {
     /// Tokenize the input stream by running "max munch" in a loop.
-    // todo: report errors.
     pub fn tokenize<'a>(
         &'a self,
         positions: impl Iterator<Item = Position<'a>> + Clone + 'a,
-    ) -> impl Iterator<Item = TokenOrComment> + 'a {
+    ) -> impl Iterator<Item = Result<TokenOrComment, TokenError>> + 'a {
         let mut positions = positions.peekable();
 
-        iter::from_fn(move || loop {
-            match positions.peek().copied() {
-                // The stream dried up; terminate.
-                None => return None,
+        let mut seen_error = false;
+        iter::from_fn(move || {
+            // Stop tokenizing after the first error.
+            if seen_error {
+                return None;
+            }
 
-                Some(pos) => {
-                    match self.max_munch(pos, &mut positions) {
-                        LongestMatch::Match(t) => return Some(t),
+            loop {
+                match positions.peek().copied() {
+                    // The stream dried up; terminate.
+                    None => return None,
 
-                        // Silently ignore, keep munching.
-                        LongestMatch::Whitespace => continue,
+                    Some(pos) => {
+                        match self.max_munch(pos, &mut positions) {
+                            Ok(LongestMatch::Match(t)) => return Some(Ok(t)),
 
-                        LongestMatch::NoMatch => {
-                            // todo: handle errors more gracefully.
-                            panic!("Failed to tokenize at {:?}", pos);
+                            // Silently ignore, keep munching.
+                            Ok(LongestMatch::Whitespace) => continue,
+
+                            Err(e) => {
+                                seen_error = true;
+                                return Some(Err(e));
+                            }
                         }
                     }
                 }
@@ -66,18 +72,18 @@ impl<S: Eq + Hash + Debug> DFA<S> {
         &'a self,
         start: Position<'a>,
         positions: &mut (impl Iterator<Item = Position<'a>> + Clone),
-    ) -> LongestMatch {
+    ) -> Result<LongestMatch<'a>, TokenError<'a>> {
         if self.accepted.contains_key(&self.init) {
             panic!("Empty matches unsupported; please fix your DFA: {:?}", self);
         }
 
         // Keep track of the longest match, and the positions after it.
-        let mut longest_match = LongestMatch::NoMatch;
+        let mut longest_match = None;
         let mut unused_symbols = positions.clone();
 
         let mut state = &self.init;
         while let Some(pos) = positions.next() {
-            let key = (state, &pos.symbol());
+            let key = (state, &pos.symbol()?);
             state = match self.delta.get(&key as &dyn KeyPair<_, _>) {
                 Some(next) => next,
                 // Implicit "dead" state, stop scanning.
@@ -86,7 +92,7 @@ impl<S: Eq + Hash + Debug> DFA<S> {
 
             if let Some(label) = self.accepted.get(state) {
                 unused_symbols = positions.clone();
-                longest_match = match label {
+                longest_match = Some(match label {
                     AcceptedStateLabel::TokenType { type_ } => {
                         LongestMatch::Match(TokenOrComment::Token(token_info(type_, start, pos)))
                     }
@@ -100,14 +106,32 @@ impl<S: Eq + Hash + Debug> DFA<S> {
                         })
                     }
                     AcceptedStateLabel::Whitespace => LongestMatch::Whitespace,
-                };
+                });
             }
         }
 
+        let longest_match = match longest_match {
+            Some(m) => m,
+            // Handle no-match-found error.
+            None => {
+                let end = match positions.next() {
+                    Some(p) => p,
+                    // Stream dried up; this is the position *after* the newline at the end of the stream:
+                    None => Position {
+                        col: start.line.len() + 1,
+                        ..start
+                    },
+                };
+                return Err(TokenError {
+                    start,
+                    type_: TokenErrorType::NotAToken { end },
+                });
+            }
+        };
+
         // Reset `positions` to reflect which symbols were actually consumed by the longest match.
         *positions = unused_symbols;
-
-        longest_match
+        Ok(longest_match)
     }
 }
 
@@ -280,7 +304,8 @@ mod tests {
         // Skip the special "newline" position at the end of `all_positions`.
         let positions = positions.take(line.len());
 
-        dfa.tokenize(positions).collect()
+        let res: Result<_, _> = dfa.tokenize(positions).collect();
+        res.unwrap()
     }
 
     /// Tokenize a short string of a's and b's.

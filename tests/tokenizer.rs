@@ -44,6 +44,7 @@ fn tokenize_and_echo(tokenizer: &Tokenizer, input_file: impl AsRef<Path>) -> Res
     let mut output = Vec::<String>::with_capacity(input.len());
 
     for elem in tokenizer.tokenize_keep_comments(input.iter().map(String::as_str)) {
+        let elem = elem.unwrap();
         sanity_check(&elem);
         echo_elem(&input, elem, &mut output);
     }
